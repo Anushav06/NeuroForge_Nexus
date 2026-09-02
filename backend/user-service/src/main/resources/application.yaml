@@ -1,5 +1,20 @@
+server:
+  port: 8081
+
 spring:
+  application:
+    name: user-service
+
   data:
     mongodb:
-      uri: ${MONGO_URI=mongodb+srv://payanshijain10_db_user:ihLGz4jZBaqxMW3n@cluster0.l8jqh9k.mongodb.net/neuroforge_nexus}
-      database: neuroforge_nexus
+      uri: mongodb://localhost:27017/nexus_user_db
+      auto-index-creation: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
