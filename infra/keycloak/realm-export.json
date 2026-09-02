@@ -1,0 +1,24 @@
+{
+  "realm": "neuroforge-realm",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      { "name": "Admin", "description": "Full system administrator" },
+      { "name": "Project Manager", "description": "Project & sprint management" },
+      { "name": "Developer", "description": "Code and task execution" },
+      { "name": "Tester", "description": "QA and test execution" },
+      { "name": "DevOps Engineer", "description": "CI/CD and pipeline management" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "nexus-web",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173"]
+    }
+  ]
+}
