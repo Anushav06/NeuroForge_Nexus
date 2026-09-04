@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { FolderKanban, LayoutDashboard, LogOut, Users } from 'lucide-react'
+import { FolderKanban, LayoutDashboard, LogOut, Timer, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { Avatar, BrandMark, RoleBadge } from './ui'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/projects', label: 'Projects', icon: FolderKanban, end: false },
+  { to: '/sprints', label: 'Sprints', icon: Timer, end: false },
   { to: '/teams', label: 'Teams', icon: Users, end: false },
 ]
 

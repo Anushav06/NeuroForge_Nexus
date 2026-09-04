@@ -5,6 +5,8 @@ import Dashboard from './pages/Dashboard.jsx'
 import Login from './pages/Login.jsx'
 import Projects from './pages/Projects.jsx'
 import Register from './pages/Register.jsx'
+import SprintBoard from './pages/SprintBoard.jsx'
+import Sprints from './pages/Sprints.jsx'
 import Teams from './pages/Teams.jsx'
 
 /**
@@ -43,6 +45,8 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="projects" element={<Projects />} />
+          <Route path="sprints" element={<Sprints />} />
+          <Route path="sprints/:sprintId" element={<SprintBoard />} />
           <Route path="teams" element={<Teams />} />
         </Route>
       </Route>

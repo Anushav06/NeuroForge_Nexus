@@ -1,7 +1,7 @@
 /**
  * ═══════════════════════════════════════════════════════════════
  *  NeuroForge Nexus — API CLIENT
- *  Milestone 1: Project & User Management (MOCK implementation)
+ *  (MOCK implementation)
  * ═══════════════════════════════════════════════════════════════
  *
  *  This is the ONLY file in the app that talks to a backend.
@@ -59,6 +59,8 @@ http.interceptors.response.use(
 export const ROLES = ['ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD', 'EMPLOYEE']
 export const EMPLOYEE_SUB_ROLES = ['Developer', 'Tester', 'Junior', 'Senior']
 export const PROJECT_STATUSES = ['PLANNING', 'ACTIVE', 'BLOCKED', 'COMPLETED']
+export const TASK_STATUSES = ['TODO', 'IN_PROGRESS', 'DONE']
+export const TASK_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT']
 export const ROLE_LABELS = {
   ADMIN: 'Admin',
   PROJECT_LEAD: 'Project Lead',
@@ -105,6 +107,9 @@ const db = {
   ],
 
   projects: [],
+
+  sprints: [],
+  tasks: [],
 }
 
 let userSeq = 8
@@ -128,6 +133,53 @@ db.projects = [
   { id: 'PRJ-1039', name: 'Aegis Audit Trail',            description: 'Immutable audit log for every privileged action.',     status: 'ACTIVE',   teamId: 'TEAM-002', leadId: 'USR-0003', memberIds: ['USR-0003', 'USR-0006', 'USR-0008'], sprint: 'Sprint 14', dueDate: '2026-09-11', createdAt: '2026-05-28' },
   { id: 'PRJ-1040', name: 'Chimera Report Engine',        description: 'Scheduled CSV/PDF exports and executive dashboards.',  status: 'PLANNING', teamId: 'TEAM-001', leadId: 'USR-0002', memberIds: ['USR-0002', 'USR-0007'],             sprint: 'Sprint 16', dueDate: '2026-10-30', createdAt: '2026-07-04' },
   { id: 'PRJ-1041', name: 'Icarus Client SDK',            description: 'Typed TypeScript SDK for the public NeuroForge API.',  status: 'ACTIVE',   teamId: 'TEAM-003', leadId: 'USR-0004', memberIds: ['USR-0004', 'USR-0005', 'USR-0006'], sprint: 'Sprint 15', dueDate: '2026-10-16', createdAt: '2026-07-10' },
+]
+
+/* ── Milestone 2: sprints & tasks ────────────────────────────────── */
+let taskSeq = 2020
+
+/** Fill a raw sprint with the project name the UI displays. */
+const hydrateSprint = (sprint) => ({
+  ...sprint,
+  project: db.projects.find((p) => p.id === sprint.projectId)?.name ?? 'Unknown project',
+})
+
+/** Fill a raw task with the assignee user object the UI displays. */
+const hydrateTask = (task) => ({
+  ...task,
+  assignee: task.assigneeId ? publicUser(db.users.find((u) => u.id === task.assigneeId)) : null,
+})
+
+db.sprints = [
+  { id: 'SPR-1001', projectId: 'PRJ-1036', name: 'Sprint 14', goal: 'Ship OAuth2 login and MFA enrollment.',      startDate: '2026-08-24', endDate: '2026-09-06' },
+  { id: 'SPR-1002', projectId: 'PRJ-1036', name: 'Sprint 15', goal: 'SSO integrations and session refresh.',      startDate: '2026-09-07', endDate: '2026-09-20' },
+  { id: 'SPR-1003', projectId: 'PRJ-1039', name: 'Sprint 14', goal: 'Immutable audit log v1 — write path.',       startDate: '2026-08-31', endDate: '2026-09-13' },
+  { id: 'SPR-1004', projectId: 'PRJ-1038', name: 'Sprint 14', goal: 'Unblock the blue/green traffic switch.',     startDate: '2026-08-24', endDate: '2026-09-06' },
+  { id: 'SPR-1005', projectId: 'PRJ-1041', name: 'Sprint 15', goal: 'SDK core client and retry policy.',          startDate: '2026-09-01', endDate: '2026-09-14' },
+  { id: 'SPR-1006', projectId: 'PRJ-1037', name: 'Sprint 15', goal: 'Notification fan-out prototype.',            startDate: '2026-09-07', endDate: '2026-09-20' },
+]
+
+db.tasks = [
+  { id: 'TSK-2001', sprintId: 'SPR-1001', title: 'Add refresh-token rotation',       assigneeId: 'USR-0005', storyPoints: 5, status: 'IN_PROGRESS', priority: 'HIGH' },
+  { id: 'TSK-2002', sprintId: 'SPR-1001', title: 'MFA enrollment UI',               assigneeId: 'USR-0007', storyPoints: 8, status: 'TODO',        priority: 'MEDIUM' },
+  { id: 'TSK-2003', sprintId: 'SPR-1001', title: 'Rate-limit the login endpoint',   assigneeId: 'USR-0002', storyPoints: 3, status: 'DONE',        priority: 'HIGH' },
+  { id: 'TSK-2004', sprintId: 'SPR-1001', title: 'Auth integration test suite',     assigneeId: 'USR-0006', storyPoints: 5, status: 'TODO',        priority: 'MEDIUM' },
+  { id: 'TSK-2005', sprintId: 'SPR-1001', title: 'Fix session timeout bug',         assigneeId: 'USR-0005', storyPoints: 2, status: 'DONE',        priority: 'URGENT' },
+  { id: 'TSK-2006', sprintId: 'SPR-1003', title: 'Audit event schema',              assigneeId: 'USR-0008', storyPoints: 3, status: 'IN_PROGRESS', priority: 'MEDIUM' },
+  { id: 'TSK-2007', sprintId: 'SPR-1003', title: 'Append-only log storage',         assigneeId: 'USR-0006', storyPoints: 8, status: 'TODO',        priority: 'HIGH' },
+  { id: 'TSK-2008', sprintId: 'SPR-1003', title: 'Audit log viewer page',           assigneeId: 'USR-0003', storyPoints: 5, status: 'TODO',        priority: 'LOW' },
+  { id: 'TSK-2009', sprintId: 'SPR-1003', title: 'Tamper-evident hashing',          assigneeId: 'USR-0006', storyPoints: 5, status: 'DONE',        priority: 'HIGH' },
+  { id: 'TSK-2010', sprintId: 'SPR-1004', title: 'Diagnose deploy-hook failure',    assigneeId: 'USR-0004', storyPoints: 2, status: 'IN_PROGRESS', priority: 'URGENT' },
+  { id: 'TSK-2011', sprintId: 'SPR-1004', title: 'Rollback smoke tests',            assigneeId: 'USR-0006', storyPoints: 3, status: 'TODO',        priority: 'HIGH' },
+  { id: 'TSK-2012', sprintId: 'SPR-1004', title: 'Blue/green traffic switch',       assigneeId: 'USR-0004', storyPoints: 8, status: 'TODO',        priority: 'HIGH' },
+  { id: 'TSK-2013', sprintId: 'SPR-1005', title: 'HTTP client core',                assigneeId: 'USR-0005', storyPoints: 8, status: 'IN_PROGRESS', priority: 'HIGH' },
+  { id: 'TSK-2014', sprintId: 'SPR-1005', title: 'Retry with backoff',              assigneeId: 'USR-0005', storyPoints: 3, status: 'TODO',        priority: 'MEDIUM' },
+  { id: 'TSK-2015', sprintId: 'SPR-1005', title: 'Typed error surfaces',            assigneeId: 'USR-0007', storyPoints: 5, status: 'DONE',        priority: 'MEDIUM' },
+  { id: 'TSK-2016', sprintId: 'SPR-1005', title: 'Publish beta to npm',             assigneeId: 'USR-0004', storyPoints: 1, status: 'TODO',        priority: 'LOW' },
+  { id: 'TSK-2017', sprintId: 'SPR-1002', title: 'Google SSO provider',             assigneeId: 'USR-0007', storyPoints: 8, status: 'TODO',        priority: 'MEDIUM' },
+  { id: 'TSK-2018', sprintId: 'SPR-1002', title: 'Session refresh tokens',          assigneeId: 'USR-0005', storyPoints: 5, status: 'TODO',        priority: 'LOW' },
+  { id: 'TSK-2019', sprintId: 'SPR-1006', title: 'Fan-out queue prototype',         assigneeId: 'USR-0008', storyPoints: 5, status: 'TODO',        priority: 'MEDIUM' },
+  { id: 'TSK-2020', sprintId: 'SPR-1006', title: 'Push notification spike',         assigneeId: 'USR-0006', storyPoints: 3, status: 'TODO',        priority: 'LOW' },
 ]
 
 // ════════════════════════════════════════════════════════════════
@@ -268,6 +320,97 @@ export async function fetchTeams() {
 export async function fetchUsers() {
   await delay()
   return db.users.map(publicUser)
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MILESTONE 2 — SPRINTS & TASKS
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Sprint list → Sprint[] (hydrated with the project name).
+ * Call with no argument for every sprint (Sprints page), or with a
+ * projectId to scope it to one project.
+ * REAL BACKEND:  const { data } = await http.get('/sprints', { params: projectId ? { projectId } : {} }); return data
+ */
+export async function fetchSprints(projectId = null) {
+  await delay()
+  const visible = projectId ? db.sprints.filter((s) => s.projectId === projectId) : db.sprints
+  return visible.map(hydrateSprint)
+}
+
+/**
+ * All tasks in one sprint → Task[] (hydrated with the assignee user object).
+ * The board groups them by status client-side; return every status.
+ * REAL BACKEND:  const { data } = await http.get(`/sprints/${sprintId}/tasks`); return data
+ */
+export async function fetchTasksBySprint(sprintId) {
+  await delay()
+  return db.tasks.filter((t) => t.sprintId === sprintId).map(hydrateTask)
+}
+
+/**
+ * Create a task in a sprint → hydrated Task.
+ * Leadership-only in the UI (ADMIN / PROJECT_LEAD / PROJECT_MANAGER) — the
+ * backend must enforce the same rule. `status` presets which board column
+ * the task lands in (defaults to TODO).
+ * REAL BACKEND:  const { data } = await http.post('/tasks', { sprintId, title, assigneeId, storyPoints, priority, status }); return data
+ */
+export async function createTask({
+  sprintId,
+  title,
+  assigneeId = null,
+  storyPoints = 3,
+  priority = 'MEDIUM',
+  status = 'TODO',
+}) {
+  await delay()
+  if (!db.sprints.some((s) => s.id === sprintId)) throw new Error('Sprint not found.')
+  if (!String(title).trim()) throw new Error('Task title is required.')
+  if (!TASK_PRIORITIES.includes(priority)) throw new Error('Please choose a valid priority.')
+  if (!TASK_STATUSES.includes(status)) throw new Error('Invalid task status.')
+  const points = Number(storyPoints)
+  if (!Number.isInteger(points) || points < 1) {
+    throw new Error('Story points must be a positive number.')
+  }
+
+  const task = {
+    id: `TSK-${++taskSeq}`,
+    title: String(title).trim(),
+    assigneeId: assigneeId || null,
+    storyPoints: points,
+    status,
+    priority,
+    sprintId,
+  }
+  db.tasks.push(task)
+  return hydrateTask(task)
+}
+
+/**
+ * Move a task to another board column → hydrated Task.
+ * EMPLOYEEs may only update tasks assigned to them — the backend MUST
+ * re-check that per request (hiding the control in the UI is not security).
+ * REAL BACKEND:  const { data } = await http.patch(`/tasks/${taskId}/status`, { status: newStatus }); return data
+ */
+export async function updateTaskStatus(taskId, newStatus) {
+  await delay()
+  const task = db.tasks.find((t) => t.id === taskId)
+  if (!task) throw new Error('Task not found.')
+  if (!TASK_STATUSES.includes(newStatus)) throw new Error('Invalid task status.')
+  task.status = newStatus
+  return hydrateTask(task)
+}
+
+/**
+ * Pure helper (not an endpoint): true when "today" falls inside the
+ * sprint's date range. Used to badge active sprints on the Sprints page
+ * and to offer "View board" on project cards.
+ */
+export function isSprintActive(sprint, today = new Date()) {
+  if (!sprint?.startDate || !sprint?.endDate) return false
+  const start = new Date(`${sprint.startDate}T00:00:00`)
+  const end = new Date(`${sprint.endDate}T23:59:59`)
+  return today >= start && today <= end
 }
 
 

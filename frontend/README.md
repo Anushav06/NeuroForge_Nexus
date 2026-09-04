@@ -51,7 +51,10 @@ All seeded accounts share the password **`forge123`**.
   Teams) + projects table with status pills
 - Projects: card grid + role-gated "New project" modal
   (ADMIN / PROJECT_LEAD / PROJECT_MANAGER only)
-- Teams: team cards with member rosters + admin-only full user table
+- Teams: team cards with member rosters, per-team project rollups + admin-only full user table
+- Sprints & Kanban board (Milestone 2): sprint list with per-sprint progress, three-column
+  board (To Do / In Progress / Done), task creation restricted to ADMIN / PROJECT_LEAD /
+  PROJECT_MANAGER, and EMPLOYEEs updating the status of their own tasks
 - Roles: `ADMIN`, `PROJECT_LEAD`, `PROJECT_MANAGER`, `TEAM_LEAD`, `EMPLOYEE`
   (+ sub-role for EMPLOYEE only)
 
@@ -109,6 +112,10 @@ API changes **one file only**.
    | `createProject(payload)` | `POST /projects` |
    | `fetchTeams()` | `GET /teams` |
    | `fetchUsers()` | `GET /users` |
+   | `fetchSprints(projectId?)` | `GET /sprints?projectId=…` |
+   | `fetchTasksBySprint(sprintId)` | `GET /sprints/{sprintId}/tasks` |
+   | `createTask(payload)` | `POST /tasks` |
+   | `updateTaskStatus(taskId, newStatus)` | `PATCH /tasks/{taskId}/status` |
 
    Keep the function names, arguments and return shapes identical and **no
    page or component needs to change**.
@@ -184,6 +191,39 @@ only the mock bodies in `src/api/client.js` get replaced. Field names are
 }
 ```
 
+**Task** (hydrated — the UI needs the resolved `assignee` user object):
+
+```json
+{
+  "id": "TSK-2001",
+  "title": "Add refresh-token rotation",
+  "assigneeId": "USR-0005",
+  "storyPoints": 5,
+  "status": "IN_PROGRESS",
+  "priority": "HIGH",
+  "sprintId": "SPR-1001",
+  "assignee": { "…User object, same shape as above…" }
+}
+```
+
+- `status` ∈ `TODO` | `IN_PROGRESS` | `DONE`
+- `priority` ∈ `LOW` | `MEDIUM` | `HIGH` | `URGENT`
+- `assigneeId`/`assignee` may be `null` (the task renders as "Unassigned")
+
+**Sprint** (hydrated — the UI needs the resolved `project` name):
+
+```json
+{
+  "id": "SPR-1001",
+  "projectId": "PRJ-1036",
+  "name": "Sprint 14",
+  "goal": "Ship OAuth2 login and MFA enrollment.",
+  "startDate": "2026-08-24",
+  "endDate": "2026-09-06",
+  "project": "Atlas Auth Service"
+}
+```
+
 ### Endpoints
 
 | # | `client.js` function | HTTP | Path |
@@ -195,6 +235,10 @@ only the mock bodies in `src/api/client.js` get replaced. Field names are
 | 5 | `createProject` | POST | `/projects` |
 | 6 | `fetchTeams` | GET | `/teams` |
 | 7 | `fetchUsers` | GET | `/users` |
+| 8 | `fetchSprints` | GET | `/sprints?projectId=…` |
+| 9 | `fetchTasksBySprint` | GET | `/sprints/{sprintId}/tasks` |
+| 10 | `createTask` | POST | `/tasks` |
+| 11 | `updateTaskStatus` | PATCH | `/tasks/{taskId}/status` |
 
 **1. `loginRequest` → `POST /auth/login`**
 
@@ -294,6 +338,48 @@ Response `200` — `Team[]` (hydrated shape above).
 **7. `fetchUsers` → `GET /users`**
 
 Response `200` — `User[]`. Powers the admin-only directory table; restrict to callers with `role === "ADMIN"`.
+
+**8. `fetchSprints` → `GET /sprints`**
+
+Optional query: `?projectId=PRJ-1036` scopes the list to one project (the Projects page uses this per card); no query returns every sprint (the Sprints page).
+
+Response `200` — `Sprint[]` (hydrated shape above). The frontend computes "active" from the date range — `startDate ≤ today ≤ endDate` — so return real dates.
+
+**9. `fetchTasksBySprint` → `GET /sprints/{sprintId}/tasks`**
+
+Response `200` — `Task[]` (hydrated shape above), every status included; the Kanban board groups by `status` client-side.
+
+**10. `createTask` → `POST /tasks`**
+
+Request:
+
+```json
+{
+  "sprintId": "SPR-1001",
+  "title": "Add rate limiting to refresh endpoint",
+  "assigneeId": "USR-0005",
+  "storyPoints": 3,
+  "priority": "HIGH",
+  "status": "TODO"
+}
+```
+
+- `status` presets the board column the task was created from (defaults `TODO`); `assigneeId` may be `null` ("Unassigned").
+- The form is only reachable by ADMIN / PROJECT_LEAD / PROJECT_MANAGER — **enforce that on the server too**.
+
+Response `201` — the created **Task** (hydrated); the UI appends it to the board.
+Failure: `400` with `{ "message": "Task title is required." }` / `{ "message": "Story points must be a positive number." }` / invalid priority; `404` with `{ "message": "Sprint not found." }`
+
+**11. `updateTaskStatus` → `PATCH /tasks/{taskId}/status`**
+
+Request:
+
+```json
+{ "status": "DONE" }
+```
+
+Response `200` — the updated **Task** (hydrated).
+Failure: `404` with `{ "message": "Task not found." }`; `400` for an invalid status; **`403` when an EMPLOYEE attempts to move a task not assigned to them** — the UI only shows the control for their own tasks, but the server must re-check ownership per request.
 
 ## Notes & assumptions
 
