@@ -7,7 +7,7 @@ spring:
 
   data:
     mongodb:
-      uri: mongodb://localhost:27017/nexus_user_db
+      uri: ${MONGO_URI}
       auto-index-creation: true
 
 management:
@@ -15,6 +15,18 @@ management:
     web:
       exposure:
         include: health,info
+
   endpoint:
     health:
       show-details: always
+
+jwt:
+  secret: ${JWT_SECRET:neuroforge-nexus-development-secret-key-2026}
+  expiration-ms: 86400000
+
+  spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

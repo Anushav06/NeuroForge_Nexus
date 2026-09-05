@@ -39,10 +39,33 @@ public class DataSeeder implements CommandLineRunner {
             ));
 
             teamRepository.saveAll(List.of(
-                    new Team("TEAM-001", "Core Forge", "Platform, auth & core services", "USR-0002", List.of("USR-0002", "USR-0005", "USR-0007")),
-                    new Team("TEAM-002", "Quality Hearth", "QA automation & release gating", "USR-0003", List.of("USR-0003", "USR-0006", "USR-0008")),
-                    new Team("TEAM-003", "Circuit Breakers", "CI/CD & infrastructure tooling", "USR-0004", List.of("USR-0004", "USR-0005", "USR-0006"))
-            ));
+        new Team(
+                "TEAM-001",
+                "Core Forge",
+                "Platform, auth & core services",
+                "USR-0002",
+                List.of("USR-0002", "USR-0005", "USR-0007"),
+                "2026-01-15"
+        ),
+
+        new Team(
+                "TEAM-002",
+                "Quality Hearth",
+                "QA automation & release gating",
+                "USR-0003",
+                List.of("USR-0003", "USR-0006", "USR-0008"),
+                "2026-01-19"
+        ),
+
+        new Team(
+                "TEAM-003",
+                "Circuit Breakers",
+                "CI/CD & infrastructure tooling",
+                "USR-0004",
+                List.of("USR-0004", "USR-0005", "USR-0006"),
+                "2026-01-22"
+        )
+));
 
             projectRepository.saveAll(List.of(
                     new Project("PRJ-1036", "Atlas Auth Service", "OAuth2, SSO and session hardening.", "ACTIVE", "TEAM-001", "USR-0002", List.of("USR-0002", "USR-0005", "USR-0007"), "Sprint 14", "2026-09-18", "2026-06-01"),

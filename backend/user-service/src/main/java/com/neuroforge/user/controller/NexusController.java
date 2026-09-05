@@ -1,7 +1,8 @@
 package com.neuroforge.user.controller;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.neuroforge.user.model.Project;
-import com.neuroforge.user.model.Team;
+
 import com.neuroforge.user.model.User;
 import com.neuroforge.user.repository.ProjectRepository;
 import com.neuroforge.user.repository.TeamRepository;
@@ -42,23 +43,19 @@ public class NexusController {
     }
 
     @GetMapping("/users")
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
+public List<User> getAllUsers() {
+    return userRepository.findAll();
+}
 
-    @GetMapping("/teams")
-    public List<Team> getAllTeams() {
-        return teamRepository.findAll();
-    }
+@GetMapping("/projects")
+public List<Project> getAllProjects() {
+    return projectRepository.findAll();
+}
 
-    @GetMapping("/projects")
-    public List<Project> getAllProjects() {
-        return projectRepository.findAll();
-    }
-
-    @PostMapping("/projects")
-    public ResponseEntity<?> createProject(@RequestBody Project project) {
-        if (project.getId() == null) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER')")
+@PostMapping("/projects")
+public ResponseEntity<?> createProject(@RequestBody Project project) {
+    if (project.getId() == null) {
             project.setId("PRJ-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase());
         }
         if (project.getCreatedAt() == null) {
