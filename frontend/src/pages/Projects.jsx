@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Calendar, Crown, FolderKanban, Plus, Repeat2, Users } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Calendar, Crown, FolderKanban, Kanban, Plus, Repeat2, Users } from 'lucide-react'
 import {
   createProject,
   fetchProjects,
+  fetchSprints,
   fetchTeams,
   fetchUsers,
+  isSprintActive,
   PROJECT_STATUSES,
 } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -48,7 +51,7 @@ function MetaRow({ icon: Icon, label, value, mono = false, danger = false }) {
   )
 }
 
-function ProjectCard({ project }) {
+function ProjectCard({ project, activeSprint, onOpenBoard }) {
   return (
     <article className="nf-card flex flex-col p-5 transition hover:border-forge-600 hover:shadow-lg hover:shadow-black/20">
       <div className="flex items-center justify-between gap-2">
@@ -78,18 +81,31 @@ function ProjectCard({ project }) {
         <AvatarStack people={project.members} max={5} />
         <span className="font-mono text-xs text-forge-faint">{project.members.length} members</span>
       </div>
+
+      {/* Milestone 2: jump straight to this project's active sprint board */}
+      {activeSprint ? (
+        <button
+          type="button"
+          onClick={() => onOpenBoard(activeSprint)}
+          className="nf-btn-ghost mt-4 w-full px-3 py-2 text-xs"
+        >
+          <Kanban className="h-3.5 w-3.5" aria-hidden /> View board · {activeSprint.name}
+        </button>
+      ) : null}
     </article>
   )
 }
 
 export default function Projects() {
   const { user, hasRole } = useAuth()
+  const navigate = useNavigate()
   // "New project" is restricted to ADMIN / PROJECT_LEAD / PROJECT_MANAGER.
   const canCreate = hasRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER')
 
   const [projects, setProjects] = useState(null)
   const [teams, setTeams] = useState([])
   const [users, setUsers] = useState([])
+  const [activeSprintByProject, setActiveSprintByProject] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -108,6 +124,16 @@ export default function Projects() {
           setTeams(teamData)
           setUsers(userData)
         }
+
+        // Milestone 2: resolve each project's active sprint (by date range)
+        // so cards can offer "View board" where one exists.
+        const sprintLists = await Promise.all(projectData.map((p) => fetchSprints(p.id)))
+        const activeMap = {}
+        for (const sprints of sprintLists) {
+          const active = sprints.find((s) => isSprintActive(s))
+          if (active) activeMap[active.projectId] = active
+        }
+        if (!cancelled) setActiveSprintByProject(activeMap)
       } catch (err) {
         if (!cancelled) setError(err.message ?? 'Failed to load projects.')
       } finally {
@@ -160,7 +186,12 @@ export default function Projects() {
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
-            <ProjectCard key={project.id} project={project} />
+            <ProjectCard
+              key={project.id}
+              project={project}
+              activeSprint={activeSprintByProject[project.id]}
+              onOpenBoard={(sprint) => navigate(`/sprints/${sprint.id}`)}
+            />
           ))}
         </div>
       )}

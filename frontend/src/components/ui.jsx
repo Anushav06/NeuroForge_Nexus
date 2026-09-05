@@ -254,5 +254,49 @@ export function AuthShell({ title, subtitle, children }) {
   )
 }
 
+/* ── Milestone 2 additions (sprints & tasks) ────────────────────── */
+
+const PRIORITY_BADGE_STYLES = {
+  LOW: 'border-signal-success/25 bg-signal-success/10 text-signal-success',
+  MEDIUM: 'border-steel-500/30 bg-steel-500/10 text-steel-300',
+  HIGH: 'border-signal-warning/25 bg-signal-warning/10 text-signal-warning',
+  URGENT: 'border-signal-danger/25 bg-signal-danger/10 text-signal-danger',
+}
+
+/** Small priority chip for task cards (LOW/MEDIUM/HIGH/URGENT). */
+export function PriorityBadge({ priority }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wide ${
+        PRIORITY_BADGE_STYLES[priority] ?? 'border-forge-600 bg-forge-800 text-forge-muted'
+      }`}
+    >
+      {priority}
+    </span>
+  )
+}
+
+/**
+ * Thin determinate progress bar; `value` is 0–100.
+ * Pass barClassName to color the fill (e.g. bg-signal-success).
+ */
+export function ProgressBar({ value = 0, barClassName = 'bg-ember-500', className = '' }) {
+  const clamped = Math.max(0, Math.min(100, Math.round(value)))
+  return (
+    <div
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={clamped}
+      className={`h-1.5 w-full overflow-hidden rounded-full bg-forge-700 ${className}`}
+    >
+      <div
+        className={`h-full rounded-full transition-[width] duration-300 ${barClassName}`}
+        style={{ width: `${clamped}%` }}
+      />
+    </div>
+  )
+}
+
 
 

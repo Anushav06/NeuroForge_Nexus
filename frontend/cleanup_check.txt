@@ -1,0 +1,3 @@
+﻿port_5199_listening=False
+pid_42836_alive=False
+temp_files_remaining=0
