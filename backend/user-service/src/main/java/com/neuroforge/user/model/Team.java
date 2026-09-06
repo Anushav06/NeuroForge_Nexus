@@ -3,6 +3,7 @@ package com.neuroforge.user.model;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,6 +24,7 @@ public class Team {
     private String createdAt;
 
     public Team() {
+        this.createdAt = Instant.now().toString();
     }
 
     public Team(
@@ -37,8 +39,8 @@ public class Team {
         this.name = name;
         this.description = description;
         this.leadId = leadId;
-        this.memberIds = memberIds;
-        this.createdAt = createdAt;
+        this.memberIds = memberIds != null ? memberIds : new ArrayList<>();
+        this.createdAt = createdAt != null ? createdAt : Instant.now().toString();
     }
 
     public String getId() {
@@ -74,11 +76,14 @@ public class Team {
     }
 
     public List<String> getMemberIds() {
+        if (memberIds == null) {
+            memberIds = new ArrayList<>();
+        }
         return memberIds;
     }
 
     public void setMemberIds(List<String> memberIds) {
-        this.memberIds = memberIds;
+        this.memberIds = memberIds != null ? memberIds : new ArrayList<>();
     }
 
     public String getCreatedAt() {

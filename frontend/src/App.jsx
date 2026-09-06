@@ -5,7 +5,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Login from './pages/Login.jsx'
 import Projects from './pages/Projects.jsx'
 import Register from './pages/Register.jsx'
-import SprintBoard from './pages/SprintBoard.jsx'
+import {SprintBoard} from './pages/SprintBoard.jsx'
 import Sprints from './pages/Sprints.jsx'
 import Teams from './pages/Teams.jsx'
 

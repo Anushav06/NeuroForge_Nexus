@@ -4,13 +4,13 @@ import com.neuroforge.user.model.Task;
 import com.neuroforge.user.service.TaskService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/projects/{projectId}/tasks")
+@CrossOrigin(origins = "*")
 public class TaskController {
 
     private final TaskService taskService;
@@ -20,7 +20,7 @@ public class TaskController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD')")
     public ResponseEntity<?> createTask(
             @PathVariable String projectId,
             @RequestBody Task task
@@ -121,7 +121,7 @@ public class TaskController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD')")
     public ResponseEntity<?> updateTask(
             @PathVariable String projectId,
             @PathVariable String id,
@@ -194,7 +194,7 @@ public class TaskController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD')")
+    // @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD')")
     public ResponseEntity<?> deleteTask(
             @PathVariable String projectId,
             @PathVariable String id

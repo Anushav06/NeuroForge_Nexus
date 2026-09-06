@@ -4,7 +4,10 @@
 
 Dark "forge / foundry" themed SDLC & project-management frontend. Built with
 React 19 + Vite, React Router, Tailwind CSS v4 (`@tailwindcss/vite`), Axios and
-lucide-react. It runs entirely on a **mock API layer** — no backend required.
+lucide-react. Backend split: **Milestone 1** (auth, users, projects, teams,
+dashboard) calls the **real Spring Boot backend via axios**; **Milestone 2**
+(sprints, tasks) still runs on the in-memory mock layer until the backend
+ships those endpoints.
 
 ---
 
@@ -19,21 +22,50 @@ npm run dev      # → http://localhost:5173
 Other scripts: `npm run build` (production build → `dist/`), `npm run preview`,
 `npm run lint` (oxlint).
 
+## Running the full stack locally
+
+The backend infrastructure requires **Docker Desktop running** — it provides
+MongoDB, Kafka, Zookeeper and Keycloak via `infra/docker-compose.yml`.
+
+1. Start the infrastructure:
+
+   ```bash
+   cd infra
+   docker compose up
+   ```
+
+2. Run the backend: open `backend/user-service` in IntelliJ and run
+   `UserServiceApplication.java` — it listens on **http://localhost:8081**.
+
+3. Run the frontend:
+
+   ```bash
+   cd frontend
+   npm run dev      # → http://localhost:5173
+   ```
+
 ## Demo credentials
 
-All seeded accounts share the password **`forge123`**.
-(The Login page shows this hint and has a one-click *"Fill demo credentials"* button.)
+<!-- TODO(backend-team): Milestone 1 auth now hits the real backend — confirm
+     the DataSeeder seeds the same demo accounts (same emails, same password
+     forge123) as listed below, and flag any mismatch here. -->
 
-| Email | Role | Sub-role |
-| --- | --- | --- |
-| `admin@neuroforge.dev` | ADMIN | — |
-| `marcus.lee@neuroforge.dev` | PROJECT_LEAD | — |
-| `elena.vasquez@neuroforge.dev` | PROJECT_MANAGER | — |
-| `tomiwa.okafor@neuroforge.dev` | TEAM_LEAD | — |
-| `ravi.menon@neuroforge.dev` | EMPLOYEE | Developer |
-| `sara.lindqvist@neuroforge.dev` | EMPLOYEE | Tester |
-| `daniel.cho@neuroforge.dev` | EMPLOYEE | Senior |
-| `amara.diallo@neuroforge.dev` | EMPLOYEE | Junior |
+All seeded accounts share the password **`forge123`**.
+(The Login page shows this hint and has a one-click _"Fill demo credentials"_ button.)
+
+These credentials are expected to work against the **real backend** now —
+provided the backend seeds the same demo accounts (see TODO above).
+
+| Email                           | Role            | Sub-role  |
+| ------------------------------- | --------------- | --------- |
+| `admin@neuroforge.dev`          | ADMIN           | —         |
+| `marcus.lee@neuroforge.dev`     | PROJECT_LEAD    | —         |
+| `elena.vasquez@neuroforge.dev`  | PROJECT_MANAGER | —         |
+| `tomiwa.okafor@neuroforge.dev`  | TEAM_LEAD       | —         |
+| `ravi.menon@neuroforge.dev`     | EMPLOYEE        | Developer |
+| `sara.lindqvist@neuroforge.dev` | EMPLOYEE        | Tester    |
+| `daniel.cho@neuroforge.dev`     | EMPLOYEE        | Senior    |
+| `amara.diallo@neuroforge.dev`   | EMPLOYEE        | Junior    |
 
 - Log in as **admin@neuroforge.dev** to see everything, including the
   admin-only user table on the Teams page and the "New project" button.
@@ -79,46 +111,50 @@ frontend/src/
 
 ---
 
-## Connecting the real backend later
+## Backend connection status
 
 Everything backend-related is isolated in **`src/api/client.js`** — pages
-import its functions and never touch axios themselves, so swapping to the real
-API changes **one file only**.
+import its functions and never touch axios themselves, so swapping a mock
+body for the real call changes **one file only**.
 
-1. **Point the client at your API** — `frontend/.env` (git-ignored) already ships
-   with the default; `.env.example` is the committed template:
+**Current connection status:**
 
-   ```ini
-   VITE_API_BASE_URL=http://localhost:8080/api
-   ```
+- **LIVE against the real backend — Milestone 1 (functions 1–7):**
+  `loginRequest`, `registerRequest`, `fetchDashboardStats`, `fetchProjects`,
+  `createProject`, `fetchTeams`, `fetchUsers` (auth, users, projects, teams,
+  dashboard) all make real axios calls to `VITE_API_BASE_URL`.
 
-   `src/api/client.js` reads it via `import.meta.env.VITE_API_BASE_URL` — change
-   the value, restart the dev server, done.
+- **Still mock — Milestone 2 (functions 8–11):** `fetchSprints`,
+  `fetchTasksBySprint`, `createTask`, `updateTaskStatus` (sprints, tasks) run
+  on local in-memory data pending the backend endpoints. They will be swapped
+  the same way once those endpoints exist.
 
-2. **The axios instance is already set up.** `client.js` exports a configured
-   `http` instance that (a) attaches the `Authorization: Bearer <token>`
-   header from sessionStorage and (b) handles global 401s by clearing the
-   session and redirecting to `/login`.
+The axios instance is already set up: `client.js` exports a configured `http`
+instance that reads the base URL from `import.meta.env.VITE_API_BASE_URL`
+(`frontend/.env`, git-ignored; committed template `.env.example` — default
+`http://localhost:8081`), attaches the `Authorization: Bearer <token>` header
+from sessionStorage, and handles global 401s by clearing the session and
+redirecting to `/login`.
 
-3. **Swap each mock body for the documented axios call.** Every function has a
-   `REAL BACKEND:` comment showing the exact replacement:
+Every function has a `REAL BACKEND:` comment showing the exact replacement
+(the table below covers both the live and pending functions):
 
-   | Function | Real call |
-   | --- | --- |
-   | `loginRequest` | `POST /auth/login` |
-   | `registerRequest` | `POST /auth/register` |
-   | `fetchDashboardStats(user)` | `GET /dashboard/stats` |
-   | `fetchProjects(user)` | `GET /projects` |
-   | `createProject(payload)` | `POST /projects` |
-   | `fetchTeams()` | `GET /teams` |
-   | `fetchUsers()` | `GET /users` |
-   | `fetchSprints(projectId?)` | `GET /sprints?projectId=…` |
-   | `fetchTasksBySprint(sprintId)` | `GET /sprints/{sprintId}/tasks` |
-   | `createTask(payload)` | `POST /tasks` |
-   | `updateTaskStatus(taskId, newStatus)` | `PATCH /tasks/{taskId}/status` |
+| Function                              | Real call                       |
+| ------------------------------------- | ------------------------------- |
+| `loginRequest`                        | `POST /auth/login`              |
+| `registerRequest`                     | `POST /auth/register`           |
+| `fetchDashboardStats(user)`           | `GET /dashboard/stats`          |
+| `fetchProjects(user)`                 | `GET /projects`                 |
+| `createProject(payload)`              | `POST /projects`                |
+| `fetchTeams()`                        | `GET /teams`                    |
+| `fetchUsers()`                        | `GET /users`                    |
+| `fetchSprints(projectId?)`            | `GET /sprints?projectId=…`      |
+| `fetchTasksBySprint(sprintId)`        | `GET /sprints/{sprintId}/tasks` |
+| `createTask(payload)`                 | `POST /tasks`                   |
+| `updateTaskStatus(taskId, newStatus)` | `PATCH /tasks/{taskId}/status`  |
 
-   Keep the function names, arguments and return shapes identical and **no
-   page or component needs to change**.
+Keep the function names, arguments and return shapes identical and **no
+page or component needs to change**.
 
 ## API Contract for Backend Team
 
@@ -226,19 +262,19 @@ only the mock bodies in `src/api/client.js` get replaced. Field names are
 
 ### Endpoints
 
-| # | `client.js` function | HTTP | Path |
-| --- | --- | --- | --- |
-| 1 | `loginRequest` | POST | `/auth/login` |
-| 2 | `registerRequest` | POST | `/auth/register` |
-| 3 | `fetchDashboardStats` | GET | `/dashboard/stats` |
-| 4 | `fetchProjects` | GET | `/projects` |
-| 5 | `createProject` | POST | `/projects` |
-| 6 | `fetchTeams` | GET | `/teams` |
-| 7 | `fetchUsers` | GET | `/users` |
-| 8 | `fetchSprints` | GET | `/sprints?projectId=…` |
-| 9 | `fetchTasksBySprint` | GET | `/sprints/{sprintId}/tasks` |
-| 10 | `createTask` | POST | `/tasks` |
-| 11 | `updateTaskStatus` | PATCH | `/tasks/{taskId}/status` |
+| #   | `client.js` function  | HTTP  | Path                        |
+| --- | --------------------- | ----- | --------------------------- |
+| 1   | `loginRequest`        | POST  | `/auth/login`               |
+| 2   | `registerRequest`     | POST  | `/auth/register`            |
+| 3   | `fetchDashboardStats` | GET   | `/dashboard/stats`          |
+| 4   | `fetchProjects`       | GET   | `/projects`                 |
+| 5   | `createProject`       | POST  | `/projects`                 |
+| 6   | `fetchTeams`          | GET   | `/teams`                    |
+| 7   | `fetchUsers`          | GET   | `/users`                    |
+| 8   | `fetchSprints`        | GET   | `/sprints?projectId=…`      |
+| 9   | `fetchTasksBySprint`  | GET   | `/sprints/{sprintId}/tasks` |
+| 10  | `createTask`          | POST  | `/tasks`                    |
+| 11  | `updateTaskStatus`    | PATCH | `/tasks/{taskId}/status`    |
 
 **1. `loginRequest` → `POST /auth/login`**
 

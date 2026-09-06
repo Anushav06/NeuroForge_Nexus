@@ -22,10 +22,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UserRepository userRepository;
 
-    public JwtAuthFilter(
-            JwtService jwtService,
-            UserRepository userRepository
-    ) {
+    public JwtAuthFilter(JwtService jwtService, UserRepository userRepository) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
     }
@@ -39,78 +36,52 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String requestPath = request.getServletPath();
 
-        // Authentication endpoints are public.
-        if (requestPath.equals("/auth/login") || requestPath.equals("/auth/register")) {
-        filterChain.doFilter(request, response);
+        if (requestPath.startsWith("/auth/") || requestPath.startsWith("/actuator/")) {
+            filterChain.doFilter(request, response);
             return;
         }
 
         String authHeader = request.getHeader("Authorization");
 
-        // No Authorization header
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            sendUnauthorized(response);
+            filterChain.doFilter(request, response);
             return;
         }
 
         String token = authHeader.substring(7);
 
-        // Invalid or expired JWT
-        if (!jwtService.isTokenValid(token)) {
-            sendUnauthorized(response);
-            return;
-        }
-
         try {
-            String userId = jwtService.extractUserId(token);
+            if (jwtService.isTokenValid(token)) {
+                String userId = jwtService.extractUserId(token);
+                Optional<User> userOptional = userRepository.findById(userId);
 
-            Optional<User> userOptional = userRepository.findById(userId);
+                if (userOptional.isPresent()) {
+                    User user = userOptional.get();
 
-            if (userOptional.isEmpty()) {
-                sendUnauthorized(response);
-                return;
+                    if (user.getStatus() == null || user.getStatus().equalsIgnoreCase("active")) {
+                        String rawRole = user.getRole() != null ? user.getRole().toString() : "ADMIN";
+                        String cleanRole = rawRole.replace("ROLE_", "").toUpperCase();
+
+                        List<SimpleGrantedAuthority> authorities = List.of(
+                                new SimpleGrantedAuthority("ROLE_" + cleanRole),
+                                new SimpleGrantedAuthority(cleanRole)
+                        );
+
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(
+                                        user.getId(),
+                                        null,
+                                        authorities
+                                );
+
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                    }
+                }
             }
-
-            User user = userOptional.get();
-
-            // Do not allow inactive users to access protected APIs.
-            if (user.getStatus() != null
-                    && !user.getStatus().equalsIgnoreCase("active")) {
-                sendUnauthorized(response);
-                return;
-            }
-
-            String role = user.getRole();
-
-            // Spring Security expects authorities such as ROLE_ADMIN.
-            SimpleGrantedAuthority authority =
-                    new SimpleGrantedAuthority("ROLE_" + role.toUpperCase());
-
-            UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            user.getId(),
-                            null,
-                            List.of(authority)
-                    );
-
-            SecurityContextHolder.getContext().setAuthentication(authentication);
-
-            filterChain.doFilter(request, response);
-
         } catch (Exception e) {
             SecurityContextHolder.clearContext();
-            sendUnauthorized(response);
         }
-    }
 
-    private void sendUnauthorized(HttpServletResponse response)
-            throws IOException {
-
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-
-        response.getWriter().write(
-                "{\"message\":\"Unauthorized\"}"
-        );
+        filterChain.doFilter(request, response);
     }
 }

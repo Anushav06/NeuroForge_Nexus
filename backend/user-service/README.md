@@ -1,94 +1,351 @@
-\# NeuroForge Nexus — User Service Backend
 
+# NeuroForge Nexus – Backend
 
+## Overview
 
-The core identity, access management, and project coordination microservice for the \*\*NeuroForge Nexus\*\* platform. Built with Spring Boot 4.1.1 and Java 21, it interfaces with MongoDB to manage organizational hierarchies, team assignments, RBAC-governed user accounts, and project metadata.
+The NeuroForge Nexus backend is developed using Java Spring Boot and provides REST APIs for authentication, project management, team management, sprint management, and task management.
 
+The backend uses MongoDB for persistent data storage and Spring Kafka for publishing task-related events.
 
+---
 
-\---
+## Technology Stack
 
+| Technology | Purpose |
+|---|---|
+| Java | Backend programming language |
+| Spring Boot | Backend framework |
+| Spring Security | Authentication and authorization |
+| JWT | Token-based authentication |
+| BCrypt | Password hashing |
+| Spring Data MongoDB | Database access |
+| MongoDB | Persistent database |
+| Spring Kafka | Kafka event publishing |
+| Maven | Build and dependency management |
 
+---
 
-\## Tech Stack
-
-
-
-| Component | Technology | Version / Spec |
-
-| :--- | :--- | :--- |
-
-| \*\*Language\*\* | Java | OpenJDK 21 (LTS) |
-
-| \*\*Framework\*\* | Spring Boot | 4.1.1 |
-
-| \*\*Database\*\* | MongoDB | 7.x / 6.x (`localhost:27017`) |
-
-| \*\*Security\*\* | Spring Security | Permissive Dev Filter / RBAC |
-
-| \*\*Build Tool\*\* | Apache Maven | Maven Wrapper (`mvnw`) |
-
-| \*\*Monitoring\*\* | Spring Boot Actuator | Health \& Metrics |
-
-
-
-\---
-
-
-
-\## Project Structure
-
-
+## Backend Project Structure
 
 ```text
-
-backend/user-service/
-
+backend/
+│
 ├── src/
+│   └── main/
+│       ├── java/
+│       │   └── com/
+│       │       └── neuroforge/
+│       │           └── user/
+│       │               ├── config/
+│       │               │   └── SecurityConfig.java
+│       │               │
+│       │               ├── controller/
+│       │               │   ├── AuthController.java
+│       │               │   ├── ProjectController.java
+│       │               │   ├── TeamController.java
+│       │               │   ├── SprintController.java
+│       │               │   └── TaskController.java
+│       │               │
+│       │               ├── model/
+│       │               │   ├── User.java
+│       │               │   ├── Project.java
+│       │               │   ├── Team.java
+│       │               │   ├── Sprint.java
+│       │               │   ├── Task.java
+│       │               │   └── TaskEvent.java
+│       │               │
+│       │               ├── repository/
+│       │               │   ├── UserRepository.java
+│       │               │   ├── ProjectRepository.java
+│       │               │   ├── TeamRepository.java
+│       │               │   ├── SprintRepository.java
+│       │               │   └── TaskRepository.java
+│       │               │
+│       │               └── service/
+│       │                   ├── AuthService.java
+│       │                   ├── JwtService.java
+│       │                   ├── ProjectService.java
+│       │                   ├── TeamService.java
+│       │                   ├── SprintService.java
+│       │                   ├── TaskService.java
+│       │                   └── KafkaTaskEventProducer.java
+│       │
+│       └── resources/
+│           └── application.yaml
+│
+├── pom.xml
+└── mvnw.cmd
+````
 
-│   ├── main/
+---
 
-│   │   ├── java/com/neuroforge/user/
+# Completed Backend Features
 
-│   │   │   ├── UserServiceApplication.java    # Application entry point
+## Milestone 1 – Authentication & Project Management
 
-│   │   │   ├── config/
+### Authentication
 
-│   │   │   │   ├── CorsConfig.java            # WebMvc CORS mapping (Vite 5173 / React 3000)
+* User registration
+* User login
+* BCrypt password hashing
+* JWT token generation
+* JWT token validation
+* JWT authentication filter
+* `/auth/me` endpoint
+* Stateless authentication using Spring Security
+* Role-Based Access Control (RBAC)
+* Protected backend endpoints
 
-│   │   │   │   ├── DataSeeder.java            # Automated demo data populator
+### Project Management
 
-│   │   │   │   └── SecurityConfig.java        # SecurityFilterChain \& CORS policies
+* Project creation
+* Project retrieval
+* Project and user relationship
+* Employee-specific project access
 
-│   │   │   ├── controller/
+### Team Management
 
-│   │   │   │   ├── AuthController.java        # Login, registration, \& JWT issuance
+* Team creation
+* Team update
+* Team deletion
+* Adding team members
+* Removing team members
+* Role-based protection for team operations
 
-│   │   │   │   └── NexusController.java       # Users, teams, projects \& dashboard stats
+---
 
-│   │   │   ├── model/
+# Milestone 2 – Sprint & Task Management
 
-│   │   │   │   ├── Project.java               # Project document model
+## Sprint Management
 
-│   │   │   │   ├── Role.java                  # RBAC Enum (ADMIN, LEAD, EMPLOYEE, etc.)
+* Sprint creation
+* Sprint retrieval
+* Sprint update
+* Sprint deletion
+* Sprint-project association
+* Sprint status management
+* Sprint start and end dates
+* Retrieval of tasks belonging to a sprint
 
-│   │   │   │   ├── Team.java                  # Team document model
+## Task Management
 
-│   │   │   │   └── User.java                  # User account document model
+* Task creation
+* Task retrieval
+* Task update
+* Task deletion
+* Task assignment
+* Task status management
+* Kanban workflow support
+* Story point tracking
+* Task progress tracking
 
-│   │   │   └── repository/
+## Subtask Management
 
-│   │   │       ├── ProjectRepository.java     # MongoRepository for projects
+Tasks support parent-child relationships using:
 
-│   │   │       ├── TeamRepository.java        # MongoRepository for teams
+```text
+parentTaskId
+```
 
-│   │   │       └── UserRepository.java        # MongoRepository with findByEmail
+This allows a task to have multiple subtasks.
 
-│   │   └── resources/
 
-│   │       └── application.yaml               # Server port, Mongo URI, and Actuator config
+# Sprint Metrics
 
-├── pom.xml                                    # Maven dependencies \& build plugin config
+## Sprint Velocity
 
-└── mvnw.cmd / mvnw                            # Maven wrapper executables
+The backend calculates sprint velocity based on completed tasks and their story points.
+
+Endpoint:
+
+```text
+GET /projects/{projectId}/tasks/sprint/{sprintId}/velocity
+```
+
+## Sprint Burndown
+
+The backend provides sprint progress information including:
+
+* Total story points
+* Completed story points
+* Remaining story points
+* Completion percentage
+
+Endpoint:
+
+```text
+GET /projects/{projectId}/tasks/sprint/{sprintId}/burndown
+```
+
+---
+
+# Kafka Integration
+
+Spring Kafka has been integrated into the backend for task event publishing.
+
+## Kafka Topic
+
+```text
+task-events
+```
+
+## Supported Events
+
+### Task Created
+
+```text
+TASK_CREATED
+```
+
+### Task Updated
+
+```text
+TASK_UPDATED
+```
+
+### Task Deleted
+
+```text
+TASK_DELETED
+```
+
+The backend publishes these events through:
+
+```text
+KafkaTaskEventProducer
+```
+
+The producer is integrated with the task service so that task operations can generate corresponding Kafka events.
+
+### Current Kafka Configuration
+
+```text
+Bootstrap Server: localhost:9092
+Topic: task-events
+```
+
+> Note: `localhost:9092` is the current local development configuration. When running the complete system using Docker, the Kafka bootstrap server may need to be changed to the Kafka Docker service/container name.
+
+---
+
+# Backend Configuration
+
+## Server
+
+```text
+Port: 8081
+```
+
+Backend base URL:
+
+```text
+http://localhost:8081
+```
+
+## MongoDB
+
+Database:
+
+```text
+nexus_user_db
+```
+
+Local MongoDB connection:
+
+```text
+mongodb://localhost:27017/nexus_user_db
+```
+
+The backend uses the environment variable:
+
+```text
+MONGO_URI
+```
+
+Example:
+
+```powershell
+$env:MONGO_URI="mongodb://localhost:27017/nexus_user_db"
+```
+
+## JWT
+
+The backend uses:
+
+```text
+JWT_SECRET
+```
+
+for JWT signing.
+
+
+For deployment, a secure secret should be provided through environment variables.
+
+---
+
+# Running the Backend Locally
+
+## Prerequisites
+
+Make sure the following are available:
+
+* Java
+* MongoDB
+* Maven / Maven Wrapper
+* Kafka (required for Kafka event publishing)
+
+## Start MongoDB
+
+Make sure the MongoDB server is running.
+
+Set the MongoDB environment variable:
+
+```powershell
+$env:MONGO_URI="mongodb://localhost:27017/nexus_user_db"
+```
+
+## Start the Backend
+
+From the backend directory:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+The backend will start on:
+
+```text
+http://localhost:8081
+```
+
+---
+
+
+### Services required for integration
+
+| Service             | Current Configuration |
+| ------------------- | --------------------- |
+| Spring Boot Backend | `8081`                |
+| MongoDB             | `localhost:27017`     |
+| MongoDB Database    | `nexus_user_db`       |
+| Kafka               | `localhost:9092`      |
+| Kafka Topic         | `task-events`         |
+
+---
+
+# Deployment Note
+
+The backend implementation and Kafka producer integration are completed.
+
+Docker containerization, Kafka broker setup, networking, and deployment configuration can be handled as part of the deployment/integration setup.
+
+When integrating the backend with Docker:
+
+1. Provide `MONGO_URI`
+2. Provide `JWT_SECRET`
+3. Configure the MongoDB service
+4. Configure the Kafka broker
+5. Update the Kafka bootstrap server from `localhost:9092` to the appropriate Docker service name if required
+6. Ensure the `task-events` Kafka topic is available
+
 

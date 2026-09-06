@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, CalendarRange, FolderKanban } from 'lucide-react'
-import { fetchSprints, fetchTasksBySprint, isSprintActive } from '../api/client'
+import { fetchProjects, fetchSprints, fetchTasksBySprint, isSprintActive } from '../api/client'
 import { EmptyState, PageHeader, ProgressBar } from '../components/ui'
 
 const formatDate = (iso) =>
@@ -22,14 +22,15 @@ function SprintsSkeleton() {
 function SprintCard({ sprint, progress }) {
   const active = isSprintActive(sprint)
   const pct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+  const sId = sprint.id || sprint._id
 
   return (
     <Link
-      to={`/sprints/${sprint.id}`}
+      to={`/sprints/${sId}`}
       className="nf-card flex flex-col p-5 text-left transition hover:border-ember-500/50 hover:shadow-lg hover:shadow-black/20"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-mono text-xs text-steel-400">{sprint.project}</span>
+        <span className="truncate font-mono text-xs text-steel-400">{sprint.project || 'Project'}</span>
         {active ? (
           <span className="shrink-0 rounded-full border border-signal-success/25 bg-signal-success/10 px-2 py-0.5 font-mono text-[10px] font-medium text-signal-success">
             ACTIVE
@@ -73,18 +74,39 @@ export default function Sprints() {
     let cancelled = false
     async function load() {
       try {
-        const sprintData = await fetchSprints()
-        // Progress per sprint = story points DONE vs total, pulled from each board.
-        const taskLists = await Promise.all(sprintData.map((s) => fetchTasksBySprint(s.id)))
+        // 1. Fetch all projects first
+        const projects = await fetchProjects()
+        
+        // 2. Fetch sprints for each project in parallel
+        const sprintLists = await Promise.all(
+          (projects || []).map(async (p) => {
+            const pId = p.id || p._id
+            const projectSprints = await fetchSprints(pId)
+            return (projectSprints || []).map((s) => ({
+              ...s,
+              projectId: pId,
+              project: p.name,
+            }))
+          })
+        )
+
+        const sprintData = sprintLists.flat()
+
+        // 3. Pull tasks for each sprint to calculate story point progress
+        const taskLists = await Promise.all(
+          sprintData.map((s) => fetchTasksBySprint(s.projectId, s.id || s._id))
+        )
+
         const progress = {}
         sprintData.forEach((sprint, index) => {
-          const tasks = taskLists[index]
-          const total = tasks.reduce((sum, t) => sum + t.storyPoints, 0)
+          const tasks = taskLists[index] || []
+          const total = tasks.reduce((sum, t) => sum + (t.storyPoints || t.points || 1), 0)
           const done = tasks
             .filter((t) => t.status === 'DONE')
-            .reduce((sum, t) => sum + t.storyPoints, 0)
-          progress[sprint.id] = { done, total }
+            .reduce((sum, t) => sum + (t.storyPoints || t.points || 1), 0)
+          progress[sprint.id || sprint._id] = { done, total }
         })
+
         if (!cancelled) {
           setSprints(sprintData)
           setProgressBySprint(progress)
@@ -101,6 +123,8 @@ export default function Sprints() {
     }
   }, [])
 
+  const safeSprints = sprints || []
+
   return (
     <div>
       <PageHeader title="Sprints" subtitle="Time-boxed iterations across every project." />
@@ -109,7 +133,7 @@ export default function Sprints() {
         <EmptyState icon={FolderKanban} title="Couldn't load sprints" message={error} />
       ) : loading ? (
         <SprintsSkeleton />
-      ) : sprints.length === 0 ? (
+      ) : safeSprints.length === 0 ? (
         <EmptyState
           icon={FolderKanban}
           title="No sprints yet"
@@ -117,13 +141,16 @@ export default function Sprints() {
         />
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {sprints.map((sprint) => (
-            <SprintCard
-              key={sprint.id}
-              sprint={sprint}
-              progress={progressBySprint[sprint.id] ?? { done: 0, total: 0 }}
-            />
-          ))}
+          {safeSprints.map((sprint) => {
+            const sId = sprint.id || sprint._id
+            return (
+              <SprintCard
+                key={sId}
+                sprint={sprint}
+                progress={progressBySprint[sId] ?? { done: 0, total: 0 }}
+              />
+            )
+          })}
         </div>
       )}
     </div>
