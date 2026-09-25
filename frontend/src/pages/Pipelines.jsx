@@ -7,6 +7,7 @@ import {
   GitBranch,
   Rocket,
   RotateCcw,
+  ShieldCheck,
   Timer,
   TrendingUp,
   X,
@@ -18,10 +19,8 @@ import { EmptyState, PageHeader, StatCard } from '../components/ui'
 /**
  * Milestone 3 — CI/CD Pipelines.
  *
- * Every build below is served from the self-contained mock layer in
- * client.js (no pipeline endpoints exist yet). Only the project list comes
- * from the live backend, following the same fetch pattern as the Sprints
- * page: fetchProjects() once, then per-project pipeline calls in parallel.
+ * Builds, stats, and rollback are served from the real cicd-service backend
+ * (see client.js). Falls back to mock data if USE_MOCK_PIPELINES is set.
  */
 
 const ROLLBACK_ROLES = ['ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER']
@@ -133,6 +132,40 @@ function StageTracker({ stages }) {
   )
 }
 
+/* ── Test results summary: "Tests: 247 passed | 0 failed | Coverage: 87%" ── */
+/* Reads Build.testResult, populated by cicd-service but previously never
+   rendered anywhere in the UI — the spec's expected M3 output explicitly
+   calls for this line. Renders nothing if a build has no testResult yet
+   (e.g. still RUNNING, or older seed data predating this field). */
+
+function TestResultSummary({ testResult }) {
+  if (!testResult) return null
+  const { passed = 0, failed = 0, skipped = 0, coveragePercent } = testResult
+  const hasCoverage = typeof coveragePercent === 'number'
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-forge-700/50 pt-3 font-mono text-[11px]">
+      <span className="inline-flex items-center gap-1.5 text-signal-success">
+        <Check className="h-3 w-3" aria-hidden />
+        {passed} passed
+      </span>
+      {failed > 0 ? (
+        <span className="inline-flex items-center gap-1.5 text-signal-danger">
+          <X className="h-3 w-3" aria-hidden />
+          {failed} failed
+        </span>
+      ) : null}
+      {skipped > 0 ? <span className="text-forge-faint">{skipped} skipped</span> : null}
+      {hasCoverage ? (
+        <span className="inline-flex items-center gap-1.5 text-steel-300">
+          <ShieldCheck className="h-3 w-3" aria-hidden />
+          Coverage: {Math.round(coveragePercent)}%
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 /* ── Single build row ───────────────────────────────────────── */
 
 function BuildRow({ build, canRollback, onRollback, rollbackPending }) {
@@ -186,6 +219,8 @@ function BuildRow({ build, canRollback, onRollback, rollbackPending }) {
       <div className="mt-4 max-w-2xl">
         <StageTracker stages={build.stages} />
       </div>
+
+      <TestResultSummary testResult={build.testResult} />
     </li>
   )
 }
@@ -273,7 +308,7 @@ export default function Pipelines() {
         const projectData = await fetchProjects()
         const safeProjects = projectData || []
 
-        // 2. Pipeline data per project is mock (Milestone 3), in parallel.
+        // 2. Pipeline data per project is live (Milestone 3), fetched in parallel.
         const buildEntries = await Promise.all(
           safeProjects.map(async (p) => {
             const pId = p.id || p._id
@@ -339,7 +374,7 @@ export default function Pipelines() {
     setRollingBackId(build.id)
     try {
       await triggerRollback(build.id)
-      // Mock-only optimistic flip: this build becomes the active deployment,
+      // Optimistic flip: this build becomes the active deployment,
       // the previous one stands down.
       setBuildsByProject((prev) => ({
         ...prev,
@@ -358,14 +393,7 @@ export default function Pipelines() {
 
   return (
     <div>
-      <PageHeader title="Pipelines" subtitle="CI/CD builds and deployments across the forge.">
-        <span
-          title="Milestone 3 is mocked client-side until the backend ships pipeline endpoints"
-          className="rounded-md border border-steel-500/30 bg-steel-500/10 px-2 py-1 font-mono text-[10px] font-semibold tracking-wider text-steel-300"
-        >
-          MOCK DATA
-        </span>
-      </PageHeader>
+      <PageHeader title="Pipelines" subtitle="CI/CD builds and deployments across the forge." />
 
       {error ? (
         <EmptyState icon={AlertTriangle} title="Couldn't load pipelines" message={error} />

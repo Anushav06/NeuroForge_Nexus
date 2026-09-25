@@ -9,6 +9,7 @@ import Register from './pages/Register.jsx'
 import {SprintBoard} from './pages/SprintBoard.jsx'
 import Sprints from './pages/Sprints.jsx'
 import Teams from './pages/Teams.jsx'
+import TeamDetail from './pages/TeamDetail.jsx'
 
 /**
  * Route map:
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="sprints/:sprintId" element={<SprintBoard />} />
           <Route path="pipelines" element={<Pipelines />} />
           <Route path="teams" element={<Teams />} />
+          <Route path="teams/:teamId" element={<TeamDetail />} />
         </Route>
       </Route>
 

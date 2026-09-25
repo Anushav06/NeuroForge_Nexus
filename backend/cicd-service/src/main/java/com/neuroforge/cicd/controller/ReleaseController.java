@@ -6,6 +6,7 @@ import com.neuroforge.cicd.dto.UpdateReleaseRequest;
 import com.neuroforge.cicd.model.Release;
 import com.neuroforge.cicd.service.ReleaseService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ public class ReleaseController {
         this.releaseService = releaseService;
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/projects/{projectId}/releases")
     public ResponseEntity<List<Release>> getProjectReleases(
             @PathVariable String projectId
@@ -33,6 +35,7 @@ public class ReleaseController {
         );
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PostMapping("/projects/{projectId}/releases")
     public ResponseEntity<Release> createRelease(
             @PathVariable String projectId,
@@ -47,6 +50,7 @@ public class ReleaseController {
         );
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/releases/{releaseId}")
     public ResponseEntity<Release> getRelease(
             @PathVariable String releaseId
@@ -59,6 +63,7 @@ public class ReleaseController {
         );
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PutMapping("/releases/{releaseId}")
     public ResponseEntity<Release> updateRelease(
             @PathVariable String releaseId,
@@ -73,6 +78,7 @@ public class ReleaseController {
         );
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PostMapping("/releases/{releaseId}/publish")
     public ResponseEntity<Release> publishRelease(
             @PathVariable String releaseId,
@@ -87,6 +93,7 @@ public class ReleaseController {
         );
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/releases/{releaseId}/changelog")
     public ResponseEntity<ChangelogResponse> getChangelog(
             @PathVariable String releaseId
