@@ -1,12 +1,14 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { FolderKanban, LayoutDashboard, LogOut, Timer, Users } from 'lucide-react'
+import { FolderKanban, LayoutDashboard, LogOut, Rocket, Timer, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import AIAssistant from './AIAssistant'
 import { Avatar, BrandMark, RoleBadge } from './ui'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/projects', label: 'Projects', icon: FolderKanban, end: false },
   { to: '/sprints', label: 'Sprints', icon: Timer, end: false },
+  { to: '/pipelines', label: 'Pipelines', icon: Rocket, end: false },
   { to: '/teams', label: 'Teams', icon: Users, end: false },
 ]
 
@@ -109,6 +111,9 @@ export default function Layout() {
           <Outlet />
         </div>
       </main>
+
+      {/* Floating AI Assistant — fixed bottom-right, clear of the sidebar */}
+      <AIAssistant />
     </div>
   )
 }

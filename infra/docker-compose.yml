@@ -34,5 +34,37 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
+  user-service:
+    build:
+      context: ../backend/user-service
+    container_name: nexus-user-service
+    restart: always
+    depends_on:
+      - mongodb
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/nexus_user_db
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # Shared signing secret - MUST be identical to the one given to
+      # cicd-service. Override via the JWT_SECRET host env var (or a .env
+      # file next to this compose file) for anything but local dev.
+      JWT_SECRET: ${JWT_SECRET:-neuroforge-nexus-development-secret-key-2026}
+
+  cicd-service:
+    build:
+      context: ../backend/cicd-service
+    container_name: nexus-cicd-service
+    restart: always
+    depends_on:
+      - mongodb
+    ports:
+      - "8083:8083"
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/nexus_cicd_db
+      # Same shared secret as user-service - MUST stay identical.
+      JWT_SECRET: ${JWT_SECRET:-neuroforge-nexus-development-secret-key-2026}
+
 volumes:
   mongo_data:

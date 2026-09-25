@@ -3,11 +3,13 @@ import Layout from './components/Layout.jsx'
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Login from './pages/Login.jsx'
+import Pipelines from './pages/Pipelines.jsx'
 import Projects from './pages/Projects.jsx'
 import Register from './pages/Register.jsx'
 import {SprintBoard} from './pages/SprintBoard.jsx'
 import Sprints from './pages/Sprints.jsx'
 import Teams from './pages/Teams.jsx'
+import TeamDetail from './pages/TeamDetail.jsx'
 
 /**
  * Route map:
@@ -47,7 +49,9 @@ export default function App() {
           <Route path="projects" element={<Projects />} />
           <Route path="sprints" element={<Sprints />} />
           <Route path="sprints/:sprintId" element={<SprintBoard />} />
+          <Route path="pipelines" element={<Pipelines />} />
           <Route path="teams" element={<Teams />} />
+          <Route path="teams/:teamId" element={<TeamDetail />} />
         </Route>
       </Route>
 

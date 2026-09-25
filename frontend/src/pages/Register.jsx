@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle, Check, Flame, Lock, Mail, User } from 'lucide-react'
-import { EMPLOYEE_SUB_ROLES, ROLES, ROLE_LABELS } from '../api/client'
+import { EMPLOYEE_SUB_ROLES, ROLES, ROLE_LABELS, SUB_ROLE_LABELS } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { AuthShell, Spinner } from '../components/ui'
 
-const INITIAL_FORM = { name: '', email: '', password: '', role: 'EMPLOYEE', subRole: 'Developer' }
+const INITIAL_FORM = { name: '', email: '', password: '', role: 'EMPLOYEE', subRole: 'FRONTEND_DEVELOPER' }
 
 /* Password policy — the strength meter and requirements list are driven by these. */
 const PASSWORD_RULES = [
@@ -50,7 +50,7 @@ export default function Register() {
   /** EMPLOYEE is the only role with a sub-role — clear it when another role is chosen. */
   function handleRoleChange(event) {
     const role = event.target.value
-    setForm((f) => ({ ...f, role, subRole: role === 'EMPLOYEE' ? f.subRole ?? 'Developer' : null }))
+    setForm((f) => ({ ...f, role, subRole: role === 'EMPLOYEE' ? f.subRole ?? 'FRONTEND_DEVELOPER' : null }))
   }
 
   async function handleSubmit(event) {
@@ -215,13 +215,13 @@ export default function Register() {
               </label>
               <select
                 id="subRole"
-                value={form.subRole ?? 'Developer'}
+                value={form.subRole ?? 'FRONTEND_DEVELOPER'}
                 onChange={update('subRole')}
                 className="nf-input"
               >
                 {EMPLOYEE_SUB_ROLES.map((sub) => (
                   <option key={sub} value={sub}>
-                    {sub}
+                    {SUB_ROLE_LABELS[sub]}
                   </option>
                 ))}
               </select>
@@ -229,7 +229,7 @@ export default function Register() {
           ) : null}
         </div>
         <p className="text-xs text-forge-faint">
-          Employees choose a sub-role: Developer, Tester, Junior or Senior.
+          Employees choose a sub-role: {EMPLOYEE_SUB_ROLES.map((sub) => SUB_ROLE_LABELS[sub]).join(', ')}.
         </p>
 
         <button type="submit" disabled={loading || !isPasswordUsable} className="nf-btn-primary w-full">
