@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { FolderKanban, LayoutDashboard, LogOut, Rocket, Timer, Users } from 'lucide-react'
+import { Activity, FolderKanban, Gauge, GitBranch, LayoutDashboard, LogOut, Rocket, Tag, Timer, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import AIAssistant from './AIAssistant'
 import { Avatar, BrandMark, RoleBadge } from './ui'
@@ -9,6 +9,10 @@ const NAV_ITEMS = [
   { to: '/projects', label: 'Projects', icon: FolderKanban, end: false },
   { to: '/sprints', label: 'Sprints', icon: Timer, end: false },
   { to: '/pipelines', label: 'Pipelines', icon: Rocket, end: false },
+  { to: '/releases', label: 'Releases', icon: Tag, end: false },
+  { to: '/deployments', label: 'Deployments', icon: Gauge, end: false },
+  { to: '/monitoring', label: 'Monitoring', icon: Activity, end: false },
+  { to: '/repository', label: 'Repository', icon: GitBranch, end: false },
   { to: '/teams', label: 'Teams', icon: Users, end: false },
 ]
 
@@ -87,7 +91,7 @@ export default function Layout() {
       {/* ── Mobile top bar ──────────────────────────────────── */}
       <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-forge-700/70 bg-forge-900/85 px-4 backdrop-blur md:hidden">
         <BrandMark compact />
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-1 overflow-x-auto">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={mobileNavLinkClass}>
               <Icon className="h-4 w-4" aria-hidden />
@@ -98,7 +102,7 @@ export default function Layout() {
             type="button"
             onClick={handleSignOut}
             aria-label="Sign out"
-            className="ml-1 grid h-9 w-9 place-items-center rounded-md text-forge-faint transition hover:text-signal-danger"
+            className="ml-1 grid h-9 w-9 shrink-0 place-items-center rounded-md text-forge-faint transition hover:text-signal-danger"
           >
             <LogOut className="h-4 w-4" aria-hidden />
           </button>

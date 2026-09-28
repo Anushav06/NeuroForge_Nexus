@@ -4,6 +4,10 @@ import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute.jsx
 import Dashboard from './pages/Dashboard.jsx'
 import Login from './pages/Login.jsx'
 import Pipelines from './pages/Pipelines.jsx'
+import Releases from './pages/Releases.jsx'
+import Deployments from './pages/Deployments.jsx'
+import Monitoring from './pages/Monitoring.jsx'
+import Repository from './pages/Repository.jsx'
 import Projects from './pages/Projects.jsx'
 import Register from './pages/Register.jsx'
 import {SprintBoard} from './pages/SprintBoard.jsx'
@@ -50,6 +54,10 @@ export default function App() {
           <Route path="sprints" element={<Sprints />} />
           <Route path="sprints/:sprintId" element={<SprintBoard />} />
           <Route path="pipelines" element={<Pipelines />} />
+          <Route path="releases" element={<Releases />} />
+          <Route path="deployments" element={<Deployments />} />
+          <Route path="monitoring" element={<Monitoring />} />
+          <Route path="repository" element={<Repository />} />
           <Route path="teams" element={<Teams />} />
           <Route path="teams/:teamId" element={<TeamDetail />} />
         </Route>

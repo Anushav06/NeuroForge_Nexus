@@ -974,7 +974,231 @@ export const pipelineApi = {
 };
 
 // =========================================================
-// 9. AI ASSISTANT — HEURISTIC PLACEHOLDER (NO REAL AI YET)
+// 9. RELEASES — MILESTONE 4 (LIVE cicd-service)
+// =========================================================
+// Real endpoints (cicd-service, port 8083):
+//   GET  /projects/{projectId}/releases        → Release[]
+//   POST /projects/{projectId}/releases        body CreateReleaseRequest
+//   GET  /releases/{releaseId}                 → Release
+//   PUT  /releases/{releaseId}                 body UpdateReleaseRequest
+//   POST /releases/{releaseId}/publish?releasedBy=...
+//   GET  /releases/{releaseId}/changelog       → ChangelogResponse
+//
+// Release.status: 'DRAFT' | 'RELEASED' | 'ROLLED_BACK'
+// Role gate (real @PreAuthorize): view = all 5 roles (incl. EMPLOYEE);
+// create/update/publish = ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD.
+
+export const fetchReleases = (projectId) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve([]);
+  return requestCicd(`/projects/${pId}/releases`);
+};
+export const getReleases = fetchReleases;
+
+export const fetchReleaseById = (releaseId) => {
+  const rId = extractId(releaseId);
+  if (!rId) return Promise.resolve(null);
+  return requestCicd(`/releases/${rId}`);
+};
+export const getReleaseById = fetchReleaseById;
+
+export const createRelease = (projectId, releaseData) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.reject(new Error('Project ID is required to create a release.'));
+  return requestCicd(`/projects/${pId}/releases`, {
+    method: 'POST',
+    body: releaseData,
+  });
+};
+
+export const updateRelease = (releaseId, releaseData) => {
+  const rId = extractId(releaseId);
+  if (!rId) return Promise.reject(new Error('Release ID is required.'));
+  return requestCicd(`/releases/${rId}`, {
+    method: 'PUT',
+    body: releaseData,
+  });
+};
+
+export const publishRelease = (releaseId, releasedBy) => {
+  const rId = extractId(releaseId);
+  if (!rId) return Promise.reject(new Error('Release ID is required.'));
+  const query = releasedBy ? `?releasedBy=${encodeURIComponent(releasedBy)}` : '';
+  return requestCicd(`/releases/${rId}/publish${query}`, {
+    method: 'POST',
+  });
+};
+
+export const fetchChangelog = (releaseId) => {
+  const rId = extractId(releaseId);
+  if (!rId) return Promise.resolve(null);
+  return requestCicd(`/releases/${rId}/changelog`);
+};
+export const getChangelog = fetchChangelog;
+
+export const releaseApi = {
+  getReleases: fetchReleases,
+  fetchReleases,
+  getReleaseById: fetchReleaseById,
+  fetchReleaseById,
+  createRelease,
+  updateRelease,
+  publishRelease,
+  getChangelog: fetchChangelog,
+  fetchChangelog,
+};
+
+// =========================================================
+// 10. DEPLOYMENTS — MILESTONE 4 (LIVE cicd-service)
+// =========================================================
+// Real endpoints:
+//   POST  /builds/{buildId}/deploy                    body { environment }
+//   GET   /projects/{projectId}/deployments?environment=...  → Deployment[]
+//   GET   /deployments/{deploymentId}                  → Deployment
+//   GET   /environments/{environment}/current?projectId=...  → Deployment
+//   PATCH /deployments/{deploymentId}/health           body DeploymentHealthRequest
+//   POST  /deployments/{deploymentId}/rollback         body { rollbackReason }
+//   GET   /projects/{projectId}/rollbacks               → Deployment[]
+//
+// Deployment.environment: 'DEV' | 'STAGING' | 'PROD'
+// Deployment.status: 'IN_PROGRESS' | 'DEPLOYED' | 'FAILED' | 'ROLLED_BACK'
+// Role gate: view = all 5 roles; deploy/health-update/rollback =
+// ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD.
+
+export const deployBuild = (buildId, environment) => {
+  const bId = extractId(buildId);
+  if (!bId) return Promise.reject(new Error('Build ID is required to deploy.'));
+  return requestCicd(`/builds/${bId}/deploy`, {
+    method: 'POST',
+    body: { environment },
+  });
+};
+
+export const fetchProjectDeployments = (projectId, environment) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve([]);
+  const query = environment ? `?environment=${encodeURIComponent(environment)}` : '';
+  return requestCicd(`/projects/${pId}/deployments${query}`);
+};
+export const getProjectDeployments = fetchProjectDeployments;
+
+export const fetchDeploymentById = (deploymentId) => {
+  const dId = extractId(deploymentId);
+  if (!dId) return Promise.resolve(null);
+  return requestCicd(`/deployments/${dId}`);
+};
+export const getDeploymentById = fetchDeploymentById;
+
+export const fetchCurrentDeployment = (projectId, environment) => {
+  const pId = extractId(projectId);
+  if (!pId || !environment) return Promise.resolve(null);
+  return requestCicd(`/environments/${environment}/current?projectId=${pId}`).catch(() => null);
+};
+export const getCurrentDeployment = fetchCurrentDeployment;
+
+export const updateDeploymentHealth = (deploymentId, healthData) => {
+  const dId = extractId(deploymentId);
+  if (!dId) return Promise.reject(new Error('Deployment ID is required.'));
+  return requestCicd(`/deployments/${dId}/health`, {
+    method: 'PATCH',
+    body: healthData,
+  });
+};
+
+export const rollbackDeployment = (deploymentId, rollbackReason) => {
+  const dId = extractId(deploymentId);
+  if (!dId) return Promise.reject(new Error('Deployment ID is required.'));
+  return requestCicd(`/deployments/${dId}/rollback`, {
+    method: 'POST',
+    body: { rollbackReason },
+  });
+};
+
+export const fetchRollbacks = (projectId) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve([]);
+  return requestCicd(`/projects/${pId}/rollbacks`);
+};
+export const getRollbacks = fetchRollbacks;
+
+export const deploymentApi = {
+  deployBuild,
+  getProjectDeployments: fetchProjectDeployments,
+  fetchProjectDeployments,
+  getDeploymentById: fetchDeploymentById,
+  fetchDeploymentById,
+  getCurrentDeployment: fetchCurrentDeployment,
+  fetchCurrentDeployment,
+  updateDeploymentHealth,
+  rollbackDeployment,
+  getRollbacks: fetchRollbacks,
+  fetchRollbacks,
+};
+
+// =========================================================
+// 11. MONITORING / HEALTH METRICS — MILESTONE 4 (LIVE cicd-service)
+// =========================================================
+// Real endpoints:
+//   GET /projects/{projectId}/pipelines                  → Pipeline[]
+//   GET /pipelines/{pipelineId}/health                    → PipelineHealthResponse
+//   GET /projects/{projectId}/cicd/stats                  → CicdStatsResponse
+//   GET /pipelines/{pipelineId}/metrics?days=14            → PipelineMetricResponse[]
+//   GET /pipelines/{pipelineId}/coverage-trend?last=20     → CoverageTrendResponse[]
+//
+// NOTE: there is no HealthMetric model on the backend. "Monitoring" is
+// computed live from Pipeline/Build/Deployment data — this page is
+// pipeline-health-centric, not a separate infra-metrics dashboard.
+
+export const fetchProjectPipelines = (projectId) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve([]);
+  return requestCicd(`/projects/${pId}/pipelines`);
+};
+export const getProjectPipelines = fetchProjectPipelines;
+
+export const fetchPipelineHealth = (pipelineId) => {
+  const plId = extractId(pipelineId);
+  if (!plId) return Promise.resolve(null);
+  return requestCicd(`/pipelines/${plId}/health`);
+};
+export const getPipelineHealth = fetchPipelineHealth;
+
+export const fetchProjectCicdStats = (projectId) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve(null);
+  return requestCicd(`/projects/${pId}/cicd/stats`);
+};
+export const getProjectCicdStats = fetchProjectCicdStats;
+
+export const fetchPipelineMetrics = (pipelineId, days = 14) => {
+  const plId = extractId(pipelineId);
+  if (!plId) return Promise.resolve([]);
+  return requestCicd(`/pipelines/${plId}/metrics?days=${days}`);
+};
+export const getPipelineMetrics = fetchPipelineMetrics;
+
+export const fetchCoverageTrend = (pipelineId, last = 20) => {
+  const plId = extractId(pipelineId);
+  if (!plId) return Promise.resolve([]);
+  return requestCicd(`/pipelines/${plId}/coverage-trend?last=${last}`);
+};
+export const getCoverageTrend = fetchCoverageTrend;
+
+export const monitoringApi = {
+  getProjectPipelines: fetchProjectPipelines,
+  fetchProjectPipelines,
+  getPipelineHealth: fetchPipelineHealth,
+  fetchPipelineHealth,
+  getProjectCicdStats: fetchProjectCicdStats,
+  fetchProjectCicdStats,
+  getPipelineMetrics: fetchPipelineMetrics,
+  fetchPipelineMetrics,
+  getCoverageTrend: fetchCoverageTrend,
+  fetchCoverageTrend,
+};
+
+// =========================================================
+// 12. AI ASSISTANT — HEURISTIC PLACEHOLDER (NO REAL AI YET)
 // =========================================================
 // NOTE(backend-team): Same pattern as the Milestone 3 pipeline mock.
 // `askAssistant` runs entirely in the browser on already-fetched data.
@@ -1198,6 +1422,9 @@ const client = {
   sprint: sprintApi,
   task: taskApi,
   pipeline: pipelineApi,
+  release: releaseApi,
+  deployment: deploymentApi,
+  monitoring: monitoringApi,
   assistant: assistantApi,
 };
 

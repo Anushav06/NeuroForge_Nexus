@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CalendarRange, CheckSquare, Pencil, Plus, Target, Trash2, Zap } from 'lucide-react'
 import {
@@ -34,7 +34,7 @@ const formatDate = (iso) =>
     : '—'
 
 /** One task on the board including subtasks checklist */
-function TaskCard({ task, subtasks = [], canEdit, canManage, onStatusChange, onDelete }) {
+function TaskCard({ task, assignee, subtasks = [], canEdit, canManage, onStatusChange, onDelete }) {
   const completedSubs = subtasks.filter((st) => st.status === 'DONE');
   const taskId = task.id || task._id
 
@@ -74,10 +74,13 @@ function TaskCard({ task, subtasks = [], canEdit, canManage, onStatusChange, onD
       ) : null}
 
       <div className="mt-3 flex items-center gap-2">
-        {task.assignee ? (
+        {/* Real backend field is task.assignedTo (a bare user-ID string, no
+            nested object) — resolve the display name from the users list,
+            the same lookup pattern Projects.jsx/Teams.jsx already use. */}
+        {assignee ? (
           <>
-            <Avatar name={task.assignee.name} className="h-6 w-6 text-[10px]" />
-            <span className="truncate text-xs text-forge-muted">{task.assignee.name}</span>
+            <Avatar name={assignee.name} className="h-6 w-6 text-[10px]" />
+            <span className="truncate text-xs text-forge-muted">{assignee.name}</span>
           </>
         ) : (
           <span className="text-xs text-forge-faint">Unassigned</span>
@@ -133,7 +136,8 @@ function NewTaskForm({ projectId, sprintId, users, defaultStatus, onClose, onCre
         status: defaultStatus,
       }
 
-      // Map assigneeId to assignedTo as required by the backend model
+      // Real backend field is assignedTo (Task.java) — map the form's
+      // assigneeId select value onto it before posting.
       if (form.assigneeId && form.assigneeId !== '') {
         payload.assignedTo = form.assigneeId
       }
@@ -423,6 +427,11 @@ export default function SprintBoard() {
   const [formStatus, setFormStatus] = useState('TODO')
   const [showEditSprintForm, setShowEditSprintForm] = useState(false)
 
+  // Id → user lookup: task cards resolve the assignee's name from
+  // task.assignedTo (a bare user-ID string) through this map — the backend
+  // never returns a nested assignee object.
+  const usersById = useMemo(() => new Map((users || []).map((u) => [u.id || u._id, u])), [users])
+
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -530,7 +539,10 @@ export default function SprintBoard() {
     }
   }
 
-  const canEditTask = (task) => canManage || task.assigneeId === currentUser.id
+  // Real backend field is task.assignedTo (a bare user-ID string) — the
+  // previous check read task.assigneeId, which never existed, so
+  // non-managers could never edit their own tasks. Fixed to match reality.
+  const canEditTask = (task) => canManage || task.assignedTo === currentUser.id
 
   const totalPoints = tasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0)
   const donePoints = tasks
@@ -722,6 +734,7 @@ export default function SprintBoard() {
                       <TaskCard
                         key={tId}
                         task={task}
+                        assignee={usersById.get(task.assignedTo)}
                         subtasks={subtasksMap[tId] || []}
                         canEdit={canEditTask(task)}
                         canManage={canManage}
