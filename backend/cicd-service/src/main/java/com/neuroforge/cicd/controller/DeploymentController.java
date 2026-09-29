@@ -6,6 +6,7 @@ import com.neuroforge.cicd.dto.RollbackRequest;
 import com.neuroforge.cicd.model.Deployment;
 import com.neuroforge.cicd.service.DeploymentService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,6 +23,7 @@ public class DeploymentController {
     }
 
     // Deploy a successful build
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PostMapping("/builds/{buildId}/deploy")
     public ResponseEntity<Deployment> deploy(
             @PathVariable String buildId,
@@ -34,6 +36,7 @@ public class DeploymentController {
     }
 
     // Get project deployments
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/projects/{projectId}/deployments")
     public ResponseEntity<List<Deployment>> getProjectDeployments(
             @PathVariable String projectId,
@@ -49,6 +52,7 @@ public class DeploymentController {
     }
 
     // Get deployment by ID
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/deployments/{deploymentId}")
     public ResponseEntity<Deployment> getDeployment(
             @PathVariable String deploymentId
@@ -60,6 +64,7 @@ public class DeploymentController {
     }
 
     // Get current deployment for environment
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/environments/{environment}/current")
     public ResponseEntity<Deployment> getCurrentDeployment(
             @PathVariable String environment,
@@ -75,6 +80,7 @@ public class DeploymentController {
     }
 
     // Update deployment health
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PatchMapping("/deployments/{deploymentId}/health")
     public ResponseEntity<Deployment> updateHealth(
             @PathVariable String deploymentId,
@@ -90,6 +96,7 @@ public class DeploymentController {
     }
 
     // Rollback deployment
+@PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
 @PostMapping("/deployments/{deploymentId}/rollback")
 public ResponseEntity<Deployment> rollback(
         @PathVariable String deploymentId,
@@ -105,6 +112,7 @@ public ResponseEntity<Deployment> rollback(
 }
 
 // Get rollback history
+@PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
 @GetMapping("/projects/{projectId}/rollbacks")
 public ResponseEntity<List<Deployment>> getRollbacks(
         @PathVariable String projectId

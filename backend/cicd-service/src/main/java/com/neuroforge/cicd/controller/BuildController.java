@@ -25,7 +25,7 @@ public class BuildController {
     // TRIGGER BUILD
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PostMapping("/pipelines/{pipelineId}/trigger")
     public ResponseEntity<Build> triggerBuild(
             @PathVariable String pipelineId,
@@ -50,7 +50,7 @@ public class BuildController {
     // GET BUILDS
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/pipelines/{pipelineId}/builds")
     public ResponseEntity<Page<Build>> getBuilds(
             @PathVariable String pipelineId,
@@ -80,7 +80,7 @@ public class BuildController {
     // GET SINGLE BUILD
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/builds/{buildId}")
     public ResponseEntity<Build> getBuild(
             @PathVariable String buildId) {
@@ -93,7 +93,7 @@ public class BuildController {
     // GET BUILD LOGS
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/builds/{buildId}/logs")
     public ResponseEntity<?> getLogs(
             @PathVariable String buildId,
@@ -109,7 +109,7 @@ public class BuildController {
     // CANCEL BUILD
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PostMapping("/builds/{buildId}/cancel")
     public ResponseEntity<Build> cancelBuild(
             @PathVariable String buildId) {
@@ -122,7 +122,7 @@ public class BuildController {
     // RETRY BUILD
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PostMapping("/builds/{buildId}/retry")
     public ResponseEntity<Build> retryBuild(
             @PathVariable String buildId) {
@@ -138,7 +138,7 @@ public class BuildController {
     // UPDATE BUILD STAGE
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PatchMapping("/builds/{buildId}/stages/{stageName}")
     public ResponseEntity<Build> updateStage(
             @PathVariable String buildId,
@@ -156,7 +156,7 @@ public class BuildController {
     // SAVE TEST RESULTS
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')")
     @PostMapping("/builds/{buildId}/test-results")
     public ResponseEntity<Build> saveTestResult(
             @PathVariable String buildId,
@@ -172,7 +172,7 @@ public class BuildController {
     // GET TEST RESULTS
     // =========================
 
-    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
     @GetMapping("/builds/{buildId}/test-results")
     public ResponseEntity<TestResult> getTestResult(
             @PathVariable String buildId) {

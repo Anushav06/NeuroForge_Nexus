@@ -24,7 +24,7 @@ public class PipelineController {
     // =========================================================
 
     @PreAuthorize(
-            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS','EMPLOYEE')"
+            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')"
     )
     @GetMapping("/projects/{projectId}/pipelines")
     public ResponseEntity<List<Pipeline>> getPipelines(
@@ -40,7 +40,7 @@ public class PipelineController {
     // =========================================================
 
     @PreAuthorize(
-            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')"
+            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')"
     )
     @PostMapping("/projects/{projectId}/pipelines")
     public ResponseEntity<Pipeline> createPipeline(
@@ -63,7 +63,7 @@ public class PipelineController {
     // =========================================================
 
     @PreAuthorize(
-            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS','EMPLOYEE')"
+            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')"
     )
     @GetMapping("/pipelines/{id}")
     public ResponseEntity<Pipeline> getPipeline(
@@ -79,7 +79,7 @@ public class PipelineController {
     // =========================================================
 
     @PreAuthorize(
-            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')"
+            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')"
     )
     @PutMapping("/pipelines/{id}")
     public ResponseEntity<Pipeline> updatePipeline(
@@ -96,7 +96,7 @@ public class PipelineController {
     // =========================================================
 
     @PreAuthorize(
-            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')"
+            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')"
     )
     @DeleteMapping("/pipelines/{id}")
     public ResponseEntity<Void> deletePipeline(
@@ -114,7 +114,7 @@ public class PipelineController {
     // =========================================================
 
     @PreAuthorize(
-            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS')"
+            "hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD')"
     )
     @PatchMapping("/pipelines/{id}/enabled")
     public ResponseEntity<Pipeline> updateEnabledStatus(

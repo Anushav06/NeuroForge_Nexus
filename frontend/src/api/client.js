@@ -1,534 +1,10 @@
-
-
-// /**
-//  * ═══════════════════════════════════════════════════════════════
-//  *  NeuroForge Nexus — UNIFIED DRY RUN CLIENT (TEAM-SYNCED)
-//  * ═══════════════════════════════════════════════════════════════
-//  *  - Automatically syncs Team rosters & Project counts for Teams.jsx
-//  *  - Auto-hydrates Sprints when Projects are created for Sprints.jsx
-//  *  - Full simulated JWT auth, RBAC scoping, and Kanban mutations
-//  */
-
-// const MOCK_DELAY = 120
-// const sleep = (ms = MOCK_DELAY) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// // ── Domain Constants ────────────────────────────────────────────
-// export const ROLES = ['ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD', 'EMPLOYEE']
-// export const EMPLOYEE_SUB_ROLES = ['Developer', 'Tester', 'Junior', 'Senior']
-// export const PROJECT_STATUSES = ['PLANNING', 'ACTIVE', 'BLOCKED', 'COMPLETED']
-// export const TASK_STATUSES = ['TODO', 'IN_PROGRESS', 'DONE']
-// export const TASK_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT']
-// export const ROLE_LABELS = {
-//   ADMIN: 'Admin',
-//   PROJECT_LEAD: 'Project Lead',
-//   PROJECT_MANAGER: 'Project Manager',
-//   TEAM_LEAD: 'Team Lead',
-//   EMPLOYEE: 'Employee',
-// }
-
-// export const DEMO_CREDENTIALS = { email: 'admin@neuroforge.dev', password: 'password123' }
-
-// // ── In-Memory Datasets ──────────────────────────────────────────
-// let mockUsers = [
-//   {
-//     id: '6a9bc068625a0a9467b3983b',
-//     name: 'Maneesh R',
-//     email: 'admin@neuroforge.dev',
-//     role: 'ADMIN',
-//     subRole: 'Senior',
-//     status: 'ACTIVE',
-//     createdAt: '2026-08-10',
-//   },
-//   {
-//     id: 'USR-0002',
-//     name: 'Mir Mohammed Kazim',
-//     email: 'kazim@neuroforge.dev',
-//     role: 'PROJECT_LEAD',
-//     subRole: 'Senior',
-//     status: 'ACTIVE',
-//     createdAt: '2026-08-12',
-//   },
-//   {
-//     id: 'USR-0003',
-//     name: 'Elena Vasquez',
-//     email: 'elena@neuroforge.dev',
-//     role: 'EMPLOYEE',
-//     subRole: 'Developer',
-//     status: 'ACTIVE',
-//     createdAt: '2026-08-18',
-//   },
-//   {
-//     id: 'USR-0004',
-//     name: 'Marcus Lee',
-//     email: 'marcus@neuroforge.dev',
-//     role: 'EMPLOYEE',
-//     subRole: 'Tester',
-//     status: 'ACTIVE',
-//     createdAt: '2026-08-20',
-//   },
-// ]
-
-// let mockTeams = [
-//   {
-//     id: 'TEAM-001',
-//     name: 'Core Infrastructure',
-//     description: 'Cloud orchestration, Kafka telemetry, and high-performance microservices.',
-//     leadId: '6a9bc068625a0a9467b3983b',
-//     memberIds: ['6a9bc068625a0a9467b3983b', 'USR-0002'],
-//   },
-//   {
-//     id: 'TEAM-002',
-//     name: 'Product Engineering',
-//     description: 'User-facing web platforms, design systems, and responsive client workflows.',
-//     leadId: 'USR-0002',
-//     memberIds: ['USR-0003', 'USR-0004'],
-//   },
-// ]
-
-// let mockProjects = [
-//   {
-//     id: 'PRJ-93E6EA',
-//     name: 'NeuroForge Nexus',
-//     description: 'Local microservices and distributed workspace platform',
-//     teamId: 'TEAM-001',
-//     leadId: '6a9bc068625a0a9467b3983b',
-//     status: 'ACTIVE',
-//     sprint: 'Sprint 1',
-//     dueDate: '2026-10-30',
-//     memberIds: ['6a9bc068625a0a9467b3983b', 'USR-0002'],
-//     createdAt: '2026-09-01',
-//   },
-//   {
-//     id: 'PRJ-88A1B2',
-//     name: 'Neural Pipeline Gateway',
-//     description: 'Real-time telemetry event streaming and monitoring service',
-//     teamId: 'TEAM-001',
-//     leadId: '6a9bc068625a0a9467b3983b',
-//     status: 'PLANNING',
-//     sprint: 'Sprint 1',
-//     dueDate: '2026-11-15',
-//     memberIds: ['6a9bc068625a0a9467b3983b', 'USR-0003'],
-//     createdAt: '2026-09-03',
-//   },
-//   {
-//     id: 'PRJ-77C3D4',
-//     name: 'Sentinel Access Shield',
-//     description: 'Zero-trust JWT authentication and role-based policy enforcement',
-//     teamId: 'TEAM-002',
-//     leadId: 'USR-0002',
-//     status: 'COMPLETED',
-//     sprint: 'Sprint 12',
-//     dueDate: '2026-08-30',
-//     memberIds: ['USR-0002', 'USR-0003'],
-//     createdAt: '2026-08-15',
-//   },
-//   {
-//     id: 'PRJ-66E5F6',
-//     name: 'Data Synapse Engine',
-//     description: 'Low-latency analytics indexing and caching cluster',
-//     teamId: 'TEAM-002',
-//     leadId: 'USR-0002',
-//     status: 'BLOCKED',
-//     sprint: 'Sprint 3',
-//     dueDate: '2026-12-01',
-//     memberIds: ['USR-0003', 'USR-0004'],
-//     createdAt: '2026-09-04',
-//   },
-// ]
-
-// let mockSprints = [
-//   {
-//     id: '6a9bc6858a17bee1a6647174',
-//     projectId: 'PRJ-93E6EA',
-//     name: 'Sprint 1 - Foundation & Kafka Pipeline',
-//     goal: 'Establish Kafka pipelines and core task workflows',
-//     startDate: '2026-09-01',
-//     endDate: '2026-09-15',
-//     status: 'ACTIVE',
-//   },
-//   {
-//     id: 'SPR-1002',
-//     projectId: 'PRJ-88A1B2',
-//     name: 'Sprint 1 - Gateway Ingestion',
-//     goal: 'Configure WebSocket feeds and event schemas',
-//     startDate: '2026-09-05',
-//     endDate: '2026-09-20',
-//     status: 'ACTIVE',
-//   },
-// ]
-
-// let mockTasks = [
-//   {
-//     id: '6a9bc6c58a17bee1a6647175',
-//     projectId: 'PRJ-93E6EA',
-//     sprintId: '6a9bc6858a17bee1a6647174',
-//     title: 'Integrate Kafka Broker & Task Events',
-//     assigneeId: '6a9bc068625a0a9467b3983b',
-//     assignedTo: '6a9bc068625a0a9467b3983b',
-//     status: 'IN_PROGRESS',
-//     priority: 'HIGH',
-//     storyPoints: 5,
-//   },
-//   {
-//     id: 'TSK-1002',
-//     projectId: 'PRJ-93E6EA',
-//     sprintId: '6a9bc6858a17bee1a6647174',
-//     title: 'Wire up SprintBoard Kanban Status Controls',
-//     assigneeId: 'USR-0002',
-//     assignedTo: 'USR-0002',
-//     status: 'TODO',
-//     priority: 'MEDIUM',
-//     storyPoints: 3,
-//   },
-//   {
-//     id: 'TSK-1003',
-//     projectId: 'PRJ-93E6EA',
-//     sprintId: '6a9bc6858a17bee1a6647174',
-//     title: 'Configure JWT Auth Filter in Spring Boot',
-//     assigneeId: '6a9bc068625a0a9467b3983b',
-//     assignedTo: '6a9bc068625a0a9467b3983b',
-//     status: 'DONE',
-//     priority: 'URGENT',
-//     storyPoints: 5,
-//   },
-//   {
-//     id: 'TSK-2001',
-//     projectId: 'PRJ-88A1B2',
-//     sprintId: 'SPR-1002',
-//     title: 'Design Event Telemetry Protocol',
-//     assigneeId: 'USR-0003',
-//     assignedTo: 'USR-0003',
-//     status: 'DONE',
-//     priority: 'HIGH',
-//     storyPoints: 8,
-//   },
-// ]
-
-// let mockSeq = 9000
-
-// // ── Hydration Helpers ───────────────────────────────────────────
-// const hydrateSprint = (sprint) => {
-//   const proj = mockProjects.find((p) => p.id === sprint.projectId)
-//   const team = proj ? mockTeams.find((t) => t.id === proj.teamId) : null
-//   return {
-//     ...sprint,
-//     project: proj ? (team ? `${proj.name} (${team.name})` : proj.name) : sprint.projectId || 'NeuroForge Nexus',
-//     teamName: team ? team.name : 'Unassigned Team',
-//   }
-// }
-
-// const hydrateTask = (task) => {
-//   const assigneeId = task.assigneeId || task.assignedTo
-//   const assigneeObj = mockUsers.find((u) => u.id === assigneeId)
-//   return {
-//     ...task,
-//     assigneeId,
-//     assignedTo: assigneeId,
-//     assignee: assigneeObj || (assigneeId ? { id: assigneeId, name: assigneeId } : null),
-//   }
-// }
-
-// const hydrateProject = (project) => {
-//   const teamObj = mockTeams.find((t) => t.id === project.teamId)
-//   const leadObj = mockUsers.find((u) => u.id === project.leadId)
-//   const memberList = (project.memberIds || []).map(
-//     (id) => mockUsers.find((u) => u.id === id) || { id, name: id, role: 'EMPLOYEE' }
-//   )
-//   return {
-//     ...project,
-//     team: teamObj ? teamObj.name : project.team || 'Unassigned',
-//     lead: leadObj ? leadObj.name : project.lead || 'Unassigned',
-//     members: memberList,
-//   }
-// }
-
-// const hydrateTeam = (team) => {
-//   const leadObj = mockUsers.find((u) => u.id === team.leadId)
-//   const memberList = (team.memberIds || []).map(
-//     (id) => mockUsers.find((u) => u.id === id) || { id, name: id, role: 'EMPLOYEE' }
-//   )
-//   return {
-//     ...team,
-//     lead: leadObj ? leadObj.name : 'Unassigned',
-//     members: memberList,
-//   }
-// }
-
-// /* ==================== AUTHENTICATION & USERS ==================== */
-
-// export async function loginRequest({ email, password }) {
-//   await sleep()
-//   const user = mockUsers.find((u) => u.email.toLowerCase() === email.toLowerCase()) || mockUsers[0]
-//   const mockToken = `dry-run-jwt-token-${Date.now()}`
-//   sessionStorage.setItem('nf_token', mockToken)
-//   sessionStorage.setItem('nf_user', JSON.stringify(user))
-//   return { token: mockToken, user }
-// }
-
-// export async function registerRequest({ name, email, password, role, subRole = null }) {
-//   await sleep()
-//   const newUser = {
-//     id: `USR-${++mockSeq}`,
-//     name,
-//     email,
-//     role: role || 'EMPLOYEE',
-//     subRole: role === 'EMPLOYEE' ? subRole || 'Developer' : null,
-//     status: 'ACTIVE',
-//     createdAt: new Date().toISOString().split('T')[0],
-//   }
-//   mockUsers.push(newUser)
-//   const mockToken = `dry-run-jwt-token-${Date.now()}`
-//   sessionStorage.setItem('nf_token', mockToken)
-//   sessionStorage.setItem('nf_user', JSON.stringify(newUser))
-//   return { token: mockToken, user: newUser }
-// }
-
-// export async function fetchUsers() {
-//   await sleep()
-//   return [...mockUsers]
-// }
-
-// /* ==================== DASHBOARD & STATS ==================== */
-
-// export async function fetchDashboardStats(user) {
-//   await sleep()
-//   const isEmployee = user?.role === 'EMPLOYEE'
-//   const myProjectsCount = mockProjects.filter(
-//     (p) => Array.isArray(p.memberIds) && p.memberIds.includes(user?.id)
-//   ).length
-
-//   return {
-//     scope: isEmployee ? 'personal' : 'organization',
-//     activeProjects: mockProjects.filter((p) => p.status === 'ACTIVE').length,
-//     myProjects: myProjectsCount,
-//     totalUsers: mockUsers.length,
-//     totalTeams: mockTeams.length,
-//   }
-// }
-
-// /* ==================== TEAMS ==================== */
-
-// export async function fetchTeams() {
-//   await sleep()
-//   return mockTeams.map(hydrateTeam)
-// }
-
-// /* ==================== PROJECTS ==================== */
-
-// export async function fetchProjects(user = null) {
-//   await sleep()
-//   const isEmployee = user?.role === 'EMPLOYEE'
-//   const visible = isEmployee
-//     ? mockProjects.filter((p) => Array.isArray(p.memberIds) && p.memberIds.includes(user.id))
-//     : mockProjects
-
-//   return visible.map(hydrateProject)
-// }
-
-// export async function createProject(projectData) {
-//   await sleep()
-//   const newProjectId = `PRJ-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-
-//   const newProject = {
-//     id: newProjectId,
-//     status: 'PLANNING',
-//     memberIds: [],
-//     ...projectData,
-//     createdAt: new Date().toISOString().split('T')[0],
-//   }
-
-//   mockProjects.unshift(newProject)
-
-//   // 1. Synchronize project members & lead with the selected Team
-//   if (projectData.teamId) {
-//     const targetTeam = mockTeams.find((t) => t.id === projectData.teamId)
-//     if (targetTeam) {
-//       const allMembers = new Set([...(targetTeam.memberIds || []), ...(projectData.memberIds || [])])
-//       if (projectData.leadId) allMembers.add(projectData.leadId)
-//       targetTeam.memberIds = Array.from(allMembers)
-//     }
-//   }
-
-//   // 2. Auto-generate linked Sprint for Sprints.jsx
-//   if (projectData.sprint && String(projectData.sprint).trim()) {
-//     const today = new Date().toISOString().split('T')[0]
-//     const twoWeeksLater = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-
-//     const newSprint = {
-//       id: `SPR-${++mockSeq}`,
-//       projectId: newProjectId,
-//       name: String(projectData.sprint).trim(),
-//       goal: projectData.description || `Initial sprint for ${projectData.name}`,
-//       startDate: today,
-//       endDate: projectData.dueDate || twoWeeksLater,
-//       status: 'ACTIVE',
-//     }
-//     mockSprints.unshift(newSprint)
-//   }
-
-//   return hydrateProject(newProject)
-// }
-
-// /* ==================== SPRINTS ==================== */
-
-// export async function fetchSprints(projectId = null) {
-//   await sleep()
-//   const visible = projectId ? mockSprints.filter((s) => s.projectId === projectId) : mockSprints
-//   return visible.map(hydrateSprint)
-// }
-
-// export async function createSprint(projectId, sprintData) {
-//   await sleep()
-//   const newSprint = {
-//     id: `SPR-${++mockSeq}`,
-//     projectId,
-//     status: 'PLANNED',
-//     ...sprintData,
-//   }
-//   mockSprints.push(newSprint)
-//   return hydrateSprint(newSprint)
-// }
-
-// export function isSprintActive(sprint, today = new Date()) {
-//   if (!sprint?.startDate || !sprint?.endDate) return true
-//   const start = new Date(`${sprint.startDate}T00:00:00`)
-//   const end = new Date(`${sprint.endDate}T23:59:59`)
-//   return today >= start && today <= end
-// }
-
-// /* ==================== TASKS ==================== */
-
-// export async function fetchTasks(projectId = null) {
-//   await sleep()
-//   const list = projectId ? mockTasks.filter((t) => t.projectId === projectId) : mockTasks
-//   return list.map(hydrateTask)
-// }
-
-// export async function fetchTasksBySprint(sprintId, projectId = null) {
-//   await sleep()
-//   const list = mockTasks.filter((t) => {
-//     const matchSprint = sprintId ? t.sprintId === sprintId : true
-//     const matchProj = projectId ? t.projectId === projectId : true
-//     return matchSprint && matchProj
-//   })
-//   return list.map(hydrateTask)
-// }
-
-// export async function createTask({
-//   sprintId,
-//   projectId = 'PRJ-93E6EA',
-//   title,
-//   assigneeId = null,
-//   assignedTo = null,
-//   storyPoints = 3,
-//   priority = 'MEDIUM',
-//   status = 'TODO',
-//   description = '',
-// }) {
-//   await sleep()
-//   if (!String(title).trim()) throw new Error('Task title is required.')
-//   if (!TASK_PRIORITIES.includes(priority)) throw new Error('Please choose a valid priority.')
-//   if (!TASK_STATUSES.includes(status)) throw new Error('Invalid task status.')
-
-//   const points = Number(storyPoints)
-//   if (!Number.isInteger(points) || points < 1) {
-//     throw new Error('Story points must be a positive integer.')
-//   }
-
-//   const effectiveSprintId = sprintId || '6a9bc6858a17bee1a6647174'
-//   const effectiveAssignee = assigneeId || assignedTo || mockUsers[0].id
-
-//   const task = {
-//     id: `TSK-${++mockSeq}`,
-//     sprintId: effectiveSprintId,
-//     projectId,
-//     title: String(title).trim(),
-//     description,
-//     assigneeId: effectiveAssignee,
-//     assignedTo: effectiveAssignee,
-//     storyPoints: points,
-//     status,
-//     priority,
-//   }
-
-//   mockTasks.push(task)
-//   return hydrateTask(task)
-// }
-
-// export async function updateTask(projectId, taskId, updatedData) {
-//   await sleep()
-//   const index = mockTasks.findIndex((t) => t.id === taskId)
-//   if (index === -1) throw new Error('Task not found.')
-//   mockTasks[index] = { ...mockTasks[index], ...updatedData }
-//   return hydrateTask(mockTasks[index])
-// }
-
-// export async function updateTaskStatus(taskId, newStatus, projectId = 'PRJ-93E6EA', existingTask = {}) {
-//   await sleep()
-//   const index = mockTasks.findIndex((t) => t.id === taskId)
-//   if (index === -1) throw new Error('Task not found.')
-//   if (!TASK_STATUSES.includes(newStatus)) throw new Error('Invalid task status.')
-
-//   mockTasks[index] = { ...mockTasks[index], ...existingTask, status: newStatus }
-//   return hydrateTask(mockTasks[index])
-// }
-
-// export async function deleteTask(taskId, projectId = 'PRJ-93E6EA') {
-//   await sleep()
-//   mockTasks = mockTasks.filter((t) => t.id !== taskId)
-//   return { message: 'Task deleted successfully' }
-// }
-
-// /* ==================== SPRINT METRICS ==================== */
-
-// export async function fetchSprintVelocity(projectId = 'PRJ-93E6EA', sprintId = '6a9bc6858a17bee1a6647174') {
-//   await sleep()
-//   const sprintTasks = mockTasks.filter((t) => t.sprintId === sprintId)
-//   const velocity = sprintTasks
-//     .filter((t) => t.status === 'DONE')
-//     .reduce((acc, curr) => acc + (curr.storyPoints || 0), 0)
-//   return { projectId, sprintId, velocity }
-// }
-
-// export async function fetchSprintBurndown(projectId = 'PRJ-93E6EA', sprintId = '6a9bc6858a17bee1a6647174') {
-//   await sleep()
-//   const sprintTasks = mockTasks.filter((t) => t.sprintId === sprintId)
-//   const total = sprintTasks.reduce((acc, curr) => acc + (curr.storyPoints || 0), 0)
-//   const completed = sprintTasks
-//     .filter((t) => t.status === 'DONE')
-//     .reduce((acc, curr) => acc + (curr.storyPoints || 0), 0)
-//   return {
-//     projectId,
-//     sprintId,
-//     totalStoryPoints: total,
-//     completedStoryPoints: completed,
-//     remainingStoryPoints: total - completed,
-//     completionPercentage: total > 0 ? Math.round((completed / total) * 100) : 0,
-//   }
-// }
-
-
-
-
-
-
-/**
- * NeuroForge Nexus - API Client & Constants
- * Base URL: http://localhost:8081
- */
-
-
-
-
-
-
-
 /**
  * NeuroForge Nexus - API Client, Constants & Utilities
  * Base URL: http://localhost:8081
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+const CICD_API_BASE_URL = import.meta.env.VITE_CICD_API_URL || 'http://localhost:8083';
 
 // =========================================================
 // CONSTANTS & ENUMS
@@ -691,7 +167,12 @@ export const formatStatus = (status) => {
 // CORE FETCH WRAPPER
 // =========================================================
 
-export async function request(endpoint, options = {}) {
+/**
+ * Shared fetch core used by request() (user-service) and requestCicd()
+ * (cicd-service). Attaches the stored JWT and normalizes errors into
+ * thrown Error objects with the backend's `message` field when present.
+ */
+async function apiFetch(baseUrl, endpoint, options = {}) {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
 
   const headers = {
@@ -710,7 +191,7 @@ export async function request(endpoint, options = {}) {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+    const response = await fetch(`${baseUrl}${endpoint}`, config);
 
     if (response.status === 204) {
       return null;
@@ -731,6 +212,16 @@ export async function request(endpoint, options = {}) {
     console.error(`[API Error] ${options.method || 'GET'} ${endpoint}:`, error.message);
     throw error;
   }
+}
+
+/** user-service (port 8081). */
+export async function request(endpoint, options = {}) {
+  return apiFetch(API_BASE_URL, endpoint, options);
+}
+
+/** cicd-service (port 8083) — same JWT, same error contract. */
+export async function requestCicd(endpoint, options = {}) {
+  return apiFetch(CICD_API_BASE_URL, endpoint, options);
 }
 
 // =========================================================
@@ -818,12 +309,31 @@ export const createTeam = (teamData) =>
     body: teamData,
   });
 
+export const updateTeam = (id, teamData) => {
+  const tId = extractId(id);
+  if (!tId) return Promise.reject(new Error('Team ID is required.'));
+  return request(`/teams/${tId}`, {
+    method: 'PUT',
+    body: teamData,
+  });
+};
+
+export const deleteTeam = (id) => {
+  const tId = extractId(id);
+  if (!tId) return Promise.reject(new Error('Team ID is required.'));
+  return request(`/teams/${tId}`, {
+    method: 'DELETE',
+  });
+};
+
 export const teamApi = {
   getTeams: fetchTeams,
   fetchTeams,
   getTeamById: fetchTeamById,
   fetchTeamById,
   createTeam,
+  updateTeam,
+  deleteTeam,
 };
 
 // =========================================================
@@ -1071,16 +581,178 @@ export const taskApi = {
 };
 
 // =========================================================
-// 8. CI/CD PIPELINES — MILESTONE 3 (SELF-CONTAINED MOCK)
+// 8. CI/CD PIPELINES — MILESTONE 3 (LIVE cicd-service)
 // =========================================================
-// NOTE(backend-team): No pipeline endpoints exist yet. Everything below runs
-// on independent in-memory arrays — the same pattern as the original
-// Sprint/Task mock data — and never touches the live auth / user / team /
-// project / sprint / task calls. Swap these three bodies for real requests
-// once the backend ships:
-//   fetchPipelines      → GET  /projects/{projectId}/pipelines
-//   fetchPipelineStats  → GET  /projects/{projectId}/pipelines/stats
-//   triggerRollback     → POST /pipelines/{buildId}/rollback
+// The Pipelines page (Pipelines.jsx) consumes three functions:
+//   fetchPipelines(projectId)     → recent builds for the project (UI shape)
+//   fetchPipelineStats(projectId) → { buildsToday, successRatePercent, avgDeploySeconds }
+//   triggerRollback(buildId)      → rolls back the deployment for that build
+//
+// Real endpoints (cicd-service, port 8083, VITE_CICD_API_URL):
+//   GET  /projects/{projectId}/pipelines           → Pipeline[]
+//   GET  /pipelines/{pipelineId}/builds?page&size  → Page<Build>  (use .content)
+//   GET  /projects/{projectId}/cicd/stats          → { buildsPerDay, successRate, avgDeployMinutes, ... }
+//   GET  /projects/{projectId}/deployments         → Deployment[] (buildId links deployment → build)
+//   POST /deployments/{deploymentId}/rollback      body { rollbackReason }
+//
+// Responses are mapped into the historical mock shapes so Pipelines.jsx needs
+// no changes. The original in-memory mock generators are kept below, renamed
+// with a `mock` prefix; set USE_MOCK_PIPELINES = true to fall back to them
+// (useful for UI work while cicd-service is down).
+
+// Flip to true to serve the Pipelines page from the mock generators below.
+const USE_MOCK_PIPELINES = false;
+
+// ── cicd-service → UI shape mapping helpers ─────────────────
+// The UI stage tracker knows PASSED / FAILED / PENDING; the backend uses
+// QUEUED / RUNNING / SUCCESS / FAILED / CANCELLED.
+const toUiStageStatus = (status) => {
+  if (status === 'SUCCESS') return 'PASSED';
+  if (status === 'FAILED') return 'FAILED';
+  return 'PENDING';
+};
+
+const mapBuildForUi = (build) => ({
+  id: build?.id,
+  pipelineId: build?.pipelineId,
+  projectId: build?.projectId,
+  buildNumber: build?.buildNumber,
+  branch: build?.branch ?? 'unknown',
+  // Backend sends the full commit SHA; the UI shows the short 7-char hash.
+  commitHash: String(build?.commitSha ?? '').slice(0, 7),
+  commitMessage: build?.commitMessage ?? '',
+  triggeredBy: build?.triggeredBy ?? 'unknown',
+  status: build?.status ?? 'QUEUED',
+  startedAt: build?.startedAt ?? null,
+  durationSeconds: build?.durationSeconds ?? 0,
+  stages: (build?.stages ?? []).map((stage) => ({
+    name: stage?.name ?? 'unknown',
+    status: toUiStageStatus(stage?.status),
+  })),
+});
+
+// Spring Page<T> responses arrive as { content: [...] }; plain lists as [...].
+const asArray = (data) => {
+  if (Array.isArray(data)) return data;
+  return data?.content ?? [];
+};
+
+// Deployments only power the ACTIVE-DEPLOYMENT hint and rollback lookups, so
+// a failure here degrades gracefully instead of failing the page.
+const loadProjectDeployments = async (pId) => {
+  try {
+    return asArray(await requestCicd(`/projects/${pId}/deployments`));
+  } catch {
+    return [];
+  }
+};
+
+// Remembers which project each build belongs to for this session, so
+// triggerRollback(build.id) can locate the matching deployment later without
+// the page having to pass extra context.
+const buildProjectIndex = new Map();
+
+export async function fetchPipelines(projectId) {
+  const pId = extractId(projectId);
+  if (!pId) return [];
+  if (USE_MOCK_PIPELINES) return mockFetchPipelines(pId);
+
+  const pipelines = asArray(await requestCicd(`/projects/${pId}/pipelines`));
+
+  // Build history for every pipeline of the project, in parallel. A single
+  // pipeline failing to return builds must not break the whole page.
+  const buildLists = await Promise.all(
+    pipelines.map((pipeline) => {
+      const pipelineId = extractId(pipeline);
+      if (!pipelineId) return Promise.resolve([]);
+      return requestCicd(`/pipelines/${pipelineId}/builds?page=0&size=20`)
+        .then(asArray)
+        .catch(() => []);
+    }),
+  );
+
+  const deployments = await loadProjectDeployments(pId);
+  const activeBuildIds = new Set(
+    deployments
+      .filter((d) => d?.status === 'DEPLOYED')
+      .map((d) => extractId(d?.buildId))
+      .filter(Boolean),
+  );
+
+  return buildLists
+    .flat()
+    .map((build) => {
+      const bId = extractId(build?.id);
+      if (bId) buildProjectIndex.set(bId, pId);
+      return {
+        ...mapBuildForUi(build),
+        isActiveDeployment: activeBuildIds.has(bId),
+      };
+    })
+    .sort((a, b) => new Date(b.startedAt ?? 0) - new Date(a.startedAt ?? 0));
+}
+
+export async function fetchPipelineStats(projectId) {
+  const pId = extractId(projectId);
+  if (!pId) return { buildsToday: 0, successRatePercent: 0, avgDeploySeconds: 0 };
+  if (USE_MOCK_PIPELINES) return mockFetchPipelineStats(pId);
+
+  try {
+    // { buildsPerDay, successRate, avgDeployMinutes, deployTrendPercent }
+    const stats = await requestCicd(`/projects/${pId}/cicd/stats`);
+    return {
+      buildsToday: Number(stats?.buildsPerDay) || 0,
+      successRatePercent: Math.round(Number(stats?.successRate) || 0),
+      avgDeploySeconds: Math.round((Number(stats?.avgDeployMinutes) || 0) * 60),
+    };
+  } catch {
+    // Stats are secondary — render zeros rather than failing the page.
+    return { buildsToday: 0, successRatePercent: 0, avgDeploySeconds: 0 };
+  }
+}
+
+export async function triggerRollback(buildOrId, maybeProjectId) {
+  const bId = extractId(buildOrId);
+  if (!bId) throw new Error('Build ID is required for rollback.');
+  if (USE_MOCK_PIPELINES) return mockTriggerRollback(bId);
+
+  // The page passes only build.id; resolve its project from the index
+  // (populated by fetchPipelines) or from an explicitly passed project.
+  const pId = extractId(maybeProjectId) || buildProjectIndex.get(bId);
+  if (!pId) {
+    throw new Error(
+      'Cannot resolve the project for this build — reload the Pipelines page and try again.',
+    );
+  }
+
+  const deployments = await loadProjectDeployments(pId);
+  const forBuild = deployments.filter((d) => extractId(d?.buildId) === bId);
+  if (forBuild.length === 0) {
+    throw new Error('This build has never been deployed, so there is no deployment to roll back.');
+  }
+
+  // Roll back the live deployment if there is one, else the latest record.
+  const target =
+    forBuild.find((d) => d?.status === 'DEPLOYED') ||
+    forBuild.find((d) => d?.status === 'IN_PROGRESS') ||
+    forBuild[0];
+
+  const dId = extractId(target?.id);
+  if (!dId) throw new Error('Deployment record for this build has no ID.');
+
+  await requestCicd(`/deployments/${dId}/rollback`, {
+    method: 'POST',
+    body: {
+      rollbackReason: `Manual rollback to build ${bId} from the Pipelines page`,
+    },
+  });
+
+  return {
+    id: bId,
+    isActiveDeployment: true,
+    message: `Rollback of build ${bId} requested.`,
+  };
+}
 
 const PIPELINE_MOCK_DELAY = 150;
 const pipelineSleep = (ms = PIPELINE_MOCK_DELAY) =>
@@ -1216,7 +888,7 @@ const seedPipelinesForProject = (projectId) => {
   }
 };
 
-export async function fetchPipelines(projectId) {
+export async function mockFetchPipelines(projectId) {
   const pId = extractId(projectId);
   await pipelineSleep();
   if (!pId) return [];
@@ -1227,7 +899,7 @@ export async function fetchPipelines(projectId) {
     .map((b) => ({ ...b, stages: b.stages.map((s) => ({ ...s })) }));
 }
 
-export async function fetchPipelineStats(projectId) {
+export async function mockFetchPipelineStats(projectId) {
   const pId = extractId(projectId);
   await pipelineSleep();
   if (!pId) {
@@ -1256,7 +928,7 @@ export async function fetchPipelineStats(projectId) {
   };
 }
 
-export async function triggerRollback(buildId) {
+export async function mockTriggerRollback(buildId) {
   const bId = extractId(buildId);
   await pipelineSleep();
 
@@ -1286,15 +958,247 @@ export async function triggerRollback(buildId) {
 }
 
 export const pipelineApi = {
+  // Live cicd-service functions (default path).
   getPipelines: fetchPipelines,
   fetchPipelines,
   getPipelineStats: fetchPipelineStats,
   fetchPipelineStats,
   triggerRollback,
+  // Original mock generators, kept as a fallback (USE_MOCK_PIPELINES or
+  // direct import when cicd-service is unavailable).
+  mockGetPipelines: mockFetchPipelines,
+  mockFetchPipelines,
+  mockGetPipelineStats: mockFetchPipelineStats,
+  mockFetchPipelineStats,
+  mockTriggerRollback,
 };
 
 // =========================================================
-// 9. AI ASSISTANT — HEURISTIC PLACEHOLDER (NO REAL AI YET)
+// 9. RELEASES — MILESTONE 4 (LIVE cicd-service)
+// =========================================================
+// Real endpoints (cicd-service, port 8083):
+//   GET  /projects/{projectId}/releases        → Release[]
+//   POST /projects/{projectId}/releases        body CreateReleaseRequest
+//   GET  /releases/{releaseId}                 → Release
+//   PUT  /releases/{releaseId}                 body UpdateReleaseRequest
+//   POST /releases/{releaseId}/publish?releasedBy=...
+//   GET  /releases/{releaseId}/changelog       → ChangelogResponse
+//
+// Release.status: 'DRAFT' | 'RELEASED' | 'ROLLED_BACK'
+// Role gate (real @PreAuthorize): view = all 5 roles (incl. EMPLOYEE);
+// create/update/publish = ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD.
+
+export const fetchReleases = (projectId) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve([]);
+  return requestCicd(`/projects/${pId}/releases`);
+};
+export const getReleases = fetchReleases;
+
+export const fetchReleaseById = (releaseId) => {
+  const rId = extractId(releaseId);
+  if (!rId) return Promise.resolve(null);
+  return requestCicd(`/releases/${rId}`);
+};
+export const getReleaseById = fetchReleaseById;
+
+export const createRelease = (projectId, releaseData) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.reject(new Error('Project ID is required to create a release.'));
+  return requestCicd(`/projects/${pId}/releases`, {
+    method: 'POST',
+    body: releaseData,
+  });
+};
+
+export const updateRelease = (releaseId, releaseData) => {
+  const rId = extractId(releaseId);
+  if (!rId) return Promise.reject(new Error('Release ID is required.'));
+  return requestCicd(`/releases/${rId}`, {
+    method: 'PUT',
+    body: releaseData,
+  });
+};
+
+export const publishRelease = (releaseId, releasedBy) => {
+  const rId = extractId(releaseId);
+  if (!rId) return Promise.reject(new Error('Release ID is required.'));
+  const query = releasedBy ? `?releasedBy=${encodeURIComponent(releasedBy)}` : '';
+  return requestCicd(`/releases/${rId}/publish${query}`, {
+    method: 'POST',
+  });
+};
+
+export const fetchChangelog = (releaseId) => {
+  const rId = extractId(releaseId);
+  if (!rId) return Promise.resolve(null);
+  return requestCicd(`/releases/${rId}/changelog`);
+};
+export const getChangelog = fetchChangelog;
+
+export const releaseApi = {
+  getReleases: fetchReleases,
+  fetchReleases,
+  getReleaseById: fetchReleaseById,
+  fetchReleaseById,
+  createRelease,
+  updateRelease,
+  publishRelease,
+  getChangelog: fetchChangelog,
+  fetchChangelog,
+};
+
+// =========================================================
+// 10. DEPLOYMENTS — MILESTONE 4 (LIVE cicd-service)
+// =========================================================
+// Real endpoints:
+//   POST  /builds/{buildId}/deploy                    body { environment }
+//   GET   /projects/{projectId}/deployments?environment=...  → Deployment[]
+//   GET   /deployments/{deploymentId}                  → Deployment
+//   GET   /environments/{environment}/current?projectId=...  → Deployment
+//   PATCH /deployments/{deploymentId}/health           body DeploymentHealthRequest
+//   POST  /deployments/{deploymentId}/rollback         body { rollbackReason }
+//   GET   /projects/{projectId}/rollbacks               → Deployment[]
+//
+// Deployment.environment: 'DEV' | 'STAGING' | 'PROD'
+// Deployment.status: 'IN_PROGRESS' | 'DEPLOYED' | 'FAILED' | 'ROLLED_BACK'
+// Role gate: view = all 5 roles; deploy/health-update/rollback =
+// ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD.
+
+export const deployBuild = (buildId, environment) => {
+  const bId = extractId(buildId);
+  if (!bId) return Promise.reject(new Error('Build ID is required to deploy.'));
+  return requestCicd(`/builds/${bId}/deploy`, {
+    method: 'POST',
+    body: { environment },
+  });
+};
+
+export const fetchProjectDeployments = (projectId, environment) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve([]);
+  const query = environment ? `?environment=${encodeURIComponent(environment)}` : '';
+  return requestCicd(`/projects/${pId}/deployments${query}`);
+};
+export const getProjectDeployments = fetchProjectDeployments;
+
+export const fetchDeploymentById = (deploymentId) => {
+  const dId = extractId(deploymentId);
+  if (!dId) return Promise.resolve(null);
+  return requestCicd(`/deployments/${dId}`);
+};
+export const getDeploymentById = fetchDeploymentById;
+
+export const fetchCurrentDeployment = (projectId, environment) => {
+  const pId = extractId(projectId);
+  if (!pId || !environment) return Promise.resolve(null);
+  return requestCicd(`/environments/${environment}/current?projectId=${pId}`).catch(() => null);
+};
+export const getCurrentDeployment = fetchCurrentDeployment;
+
+export const updateDeploymentHealth = (deploymentId, healthData) => {
+  const dId = extractId(deploymentId);
+  if (!dId) return Promise.reject(new Error('Deployment ID is required.'));
+  return requestCicd(`/deployments/${dId}/health`, {
+    method: 'PATCH',
+    body: healthData,
+  });
+};
+
+export const rollbackDeployment = (deploymentId, rollbackReason) => {
+  const dId = extractId(deploymentId);
+  if (!dId) return Promise.reject(new Error('Deployment ID is required.'));
+  return requestCicd(`/deployments/${dId}/rollback`, {
+    method: 'POST',
+    body: { rollbackReason },
+  });
+};
+
+export const fetchRollbacks = (projectId) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve([]);
+  return requestCicd(`/projects/${pId}/rollbacks`);
+};
+export const getRollbacks = fetchRollbacks;
+
+export const deploymentApi = {
+  deployBuild,
+  getProjectDeployments: fetchProjectDeployments,
+  fetchProjectDeployments,
+  getDeploymentById: fetchDeploymentById,
+  fetchDeploymentById,
+  getCurrentDeployment: fetchCurrentDeployment,
+  fetchCurrentDeployment,
+  updateDeploymentHealth,
+  rollbackDeployment,
+  getRollbacks: fetchRollbacks,
+  fetchRollbacks,
+};
+
+// =========================================================
+// 11. MONITORING / HEALTH METRICS — MILESTONE 4 (LIVE cicd-service)
+// =========================================================
+// Real endpoints:
+//   GET /projects/{projectId}/pipelines                  → Pipeline[]
+//   GET /pipelines/{pipelineId}/health                    → PipelineHealthResponse
+//   GET /projects/{projectId}/cicd/stats                  → CicdStatsResponse
+//   GET /pipelines/{pipelineId}/metrics?days=14            → PipelineMetricResponse[]
+//   GET /pipelines/{pipelineId}/coverage-trend?last=20     → CoverageTrendResponse[]
+//
+// NOTE: there is no HealthMetric model on the backend. "Monitoring" is
+// computed live from Pipeline/Build/Deployment data — this page is
+// pipeline-health-centric, not a separate infra-metrics dashboard.
+
+export const fetchProjectPipelines = (projectId) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve([]);
+  return requestCicd(`/projects/${pId}/pipelines`);
+};
+export const getProjectPipelines = fetchProjectPipelines;
+
+export const fetchPipelineHealth = (pipelineId) => {
+  const plId = extractId(pipelineId);
+  if (!plId) return Promise.resolve(null);
+  return requestCicd(`/pipelines/${plId}/health`);
+};
+export const getPipelineHealth = fetchPipelineHealth;
+
+export const fetchProjectCicdStats = (projectId) => {
+  const pId = extractId(projectId);
+  if (!pId) return Promise.resolve(null);
+  return requestCicd(`/projects/${pId}/cicd/stats`);
+};
+export const getProjectCicdStats = fetchProjectCicdStats;
+
+export const fetchPipelineMetrics = (pipelineId, days = 14) => {
+  const plId = extractId(pipelineId);
+  if (!plId) return Promise.resolve([]);
+  return requestCicd(`/pipelines/${plId}/metrics?days=${days}`);
+};
+export const getPipelineMetrics = fetchPipelineMetrics;
+
+export const fetchCoverageTrend = (pipelineId, last = 20) => {
+  const plId = extractId(pipelineId);
+  if (!plId) return Promise.resolve([]);
+  return requestCicd(`/pipelines/${plId}/coverage-trend?last=${last}`);
+};
+export const getCoverageTrend = fetchCoverageTrend;
+
+export const monitoringApi = {
+  getProjectPipelines: fetchProjectPipelines,
+  fetchProjectPipelines,
+  getPipelineHealth: fetchPipelineHealth,
+  fetchPipelineHealth,
+  getProjectCicdStats: fetchProjectCicdStats,
+  fetchProjectCicdStats,
+  getPipelineMetrics: fetchPipelineMetrics,
+  fetchPipelineMetrics,
+  getCoverageTrend: fetchCoverageTrend,
+  fetchCoverageTrend,
+};
+
+// =========================================================
+// 12. AI ASSISTANT — HEURISTIC PLACEHOLDER (NO REAL AI YET)
 // =========================================================
 // NOTE(backend-team): Same pattern as the Milestone 3 pipeline mock.
 // `askAssistant` runs entirely in the browser on already-fetched data.
@@ -1518,6 +1422,9 @@ const client = {
   sprint: sprintApi,
   task: taskApi,
   pipeline: pipelineApi,
+  release: releaseApi,
+  deployment: deploymentApi,
+  monitoring: monitoringApi,
   assistant: assistantApi,
 };
 

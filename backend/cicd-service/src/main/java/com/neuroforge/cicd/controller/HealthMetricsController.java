@@ -62,7 +62,7 @@ public class HealthMetricsController {
     }
 
     @GetMapping("/pipelines/{pipelineId}/coverage-trend")
-@PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','DEVOPS','EMPLOYEE')")
+@PreAuthorize("hasAnyRole('ADMIN','PROJECT_LEAD','PROJECT_MANAGER','TEAM_LEAD','EMPLOYEE')")
 public ResponseEntity<List<CoverageTrendResponse>> getCoverageTrend(
         @PathVariable String pipelineId,
         @RequestParam(defaultValue = "20") int last) {

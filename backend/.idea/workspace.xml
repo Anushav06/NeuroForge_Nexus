@@ -4,12 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="d8b3c919-e4c5-4150-92c3-1d4706e8297d" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../Jenkinsfile" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/cicd-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/cicd-service/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cicd-service/src/main/java/com/neuroforge/cicd/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/cicd-service/src/main/java/com/neuroforge/cicd/config/SecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cicd-service/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/cicd-service/src/main/resources/application.yml" afterDir="false" />
-    </list>
+    <list default="true" id="d8b3c919-e4c5-4150-92c3-1d4706e8297d" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -18,10 +13,10 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
-  <component name="KubernetesApiPersistence"><![CDATA[{}]]></component>
-  <component name="KubernetesApiProvider"><![CDATA[{
-  "isMigrated": true
-}]]></component>
+  <component name="KubernetesApiPersistence">{}</component>
+  <component name="KubernetesApiProvider">{
+  &quot;isMigrated&quot;: true
+}</component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 4
 }</component>
@@ -69,7 +64,7 @@
       <updated>1790608232211</updated>
       <workItem from="1790608234558" duration="678000" />
       <workItem from="1790681173728" duration="2559000" />
-      <workItem from="1790686022256" duration="1649000" />
+      <workItem from="1790686022256" duration="2371000" />
     </task>
     <servers />
   </component>
