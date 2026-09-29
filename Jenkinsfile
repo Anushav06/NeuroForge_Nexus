@@ -24,7 +24,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.image('neuroforge/cicd-service:latest').build('-f backend/cicd-service/Dockerfile .')
+                    sh 'docker build -t neuroforge/cicd-service:latest -f backend/cicd-service/Dockerfile .'
                 }
             }
         }
