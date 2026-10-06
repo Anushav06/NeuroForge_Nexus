@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Activity, FolderKanban, Gauge, GitBranch, LayoutDashboard, LogOut, Rocket, Tag, Timer, Users } from 'lucide-react'
+import { Activity, Bug, FolderKanban, Gauge, GitBranch, LayoutDashboard, LogOut, Rocket, Tag, Timer, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import AIAssistant from './AIAssistant'
 import { Avatar, BrandMark, RoleBadge } from './ui'
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/deployments', label: 'Deployments', icon: Gauge, end: false },
   { to: '/monitoring', label: 'Monitoring', icon: Activity, end: false },
   { to: '/repository', label: 'Repository', icon: GitBranch, end: false },
+  { to: '/bugs', label: 'Bug Reports', icon: Bug, end: false },
   { to: '/teams', label: 'Teams', icon: Users, end: false },
 ]
 

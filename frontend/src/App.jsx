@@ -8,6 +8,7 @@ import Releases from './pages/Releases.jsx'
 import Deployments from './pages/Deployments.jsx'
 import Monitoring from './pages/Monitoring.jsx'
 import Repository from './pages/Repository.jsx'
+import BugReports from './pages/BugReports.jsx'
 import Projects from './pages/Projects.jsx'
 import Register from './pages/Register.jsx'
 import {SprintBoard} from './pages/SprintBoard.jsx'
@@ -15,20 +16,9 @@ import Sprints from './pages/Sprints.jsx'
 import Teams from './pages/Teams.jsx'
 import TeamDetail from './pages/TeamDetail.jsx'
 
-/**
- * Route map:
- *   /login, /register → public (authenticated users are bounced to /)
- *   /, /projects, /teams → behind ProtectedRoute (redirects to /login)
- *
- * Role-gated routes: wrap any <Route> in <RoleRoute roles={[...]}>
- * (see src/components/ProtectedRoute.jsx). Milestone 1 gates sensitive
- * content inline instead — the New-project form (ADMIN / PROJECT_LEAD /
- * PROJECT_MANAGER) and the Teams user table (ADMIN).
- */
 export default function App() {
   return (
     <Routes>
-      {/* Public */}
       <Route
         path="/login"
         element={
@@ -46,7 +36,6 @@ export default function App() {
         }
       />
 
-      {/* Authenticated app shell */}
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -58,12 +47,12 @@ export default function App() {
           <Route path="deployments" element={<Deployments />} />
           <Route path="monitoring" element={<Monitoring />} />
           <Route path="repository" element={<Repository />} />
+          <Route path="bugs" element={<BugReports />} />
           <Route path="teams" element={<Teams />} />
           <Route path="teams/:teamId" element={<TeamDetail />} />
         </Route>
       </Route>
 
-      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
