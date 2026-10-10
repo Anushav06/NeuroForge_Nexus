@@ -38,10 +38,14 @@ import { EmptyState, PageHeader, StatCard } from '../components/ui'
  *
  * Status field values come from the trainer's exact list: NEW, CONFIRMED,
  * IN_PROGRESS, FIXED, RETEST, CLOSED, REOPENED. The workflow diagram's
- * "Triaged" step is the NEW → CONFIRMED transition; "Assigned" is just
- * setting assignedTo (can happen at any point, not a stored status); the
- * diagram's Retest "Failed"/"Passed" branches are the two actions available
- * on a RETEST bug (→ REOPENED or → CLOSED).
+ * "Triaged" step is the NEW → CONFIRMED transition; "Assigned" is a step
+ * enforced in the UI: a CONFIRMED bug cannot be started until someone is
+ * assigned (assignedTo is a field, not a stored status); the diagram's
+ * Retest "Failed"/"Passed" branches are the two actions available on a
+ * RETEST bug (→ REOPENED or → CLOSED).
+ *
+ * Error message and console log are pasted text stored on the bug itself.
+ * Screenshots, recordings, logs and other files are listed by name only.
  */
 
 const ENVIRONMENTS = ['DEVELOPMENT', 'STAGING', 'PRODUCTION']
@@ -114,6 +118,8 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
     severity: 'MEDIUM',
     priority: 'MEDIUM',
     assignedTo: '',
+    errorMessage: '',
+    consoleLog: '',
   })
   const [attachments, setAttachments] = useState([])
   const fileInputRef = useRef(null)
@@ -242,9 +248,31 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
             </select>
           </label>
 
+          <label className="block text-xs font-medium text-forge-muted">
+            Error message (optional)
+            <textarea
+              value={form.errorMessage}
+              onChange={(e) => setForm((f) => ({ ...f, errorMessage: e.target.value }))}
+              rows={2}
+              placeholder="Paste the error text the user saw"
+              className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 font-mono text-xs text-forge-text outline-none focus:border-ember-500"
+            />
+          </label>
+
+          <label className="block text-xs font-medium text-forge-muted">
+            Console log (optional)
+            <textarea
+              value={form.consoleLog}
+              onChange={(e) => setForm((f) => ({ ...f, consoleLog: e.target.value }))}
+              rows={3}
+              placeholder="Paste browser console or server log output"
+              className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 font-mono text-xs text-forge-text outline-none focus:border-ember-500"
+            />
+          </label>
+
           <div>
             <p className="mb-1.5 text-xs font-medium text-forge-muted">
-              Attachments — screenshots, recordings, logs, console output, files
+              Attachments — screenshots, recordings, logs, files
             </p>
             <p className="mb-2 rounded-lg border border-signal-warning/25 bg-signal-warning/10 px-3 py-2 text-[11px] text-signal-warning">
               Demo mode — files are listed here but not actually uploaded anywhere;
@@ -316,6 +344,17 @@ function BugRow({ bug, users, usersById, canTransition, canManage, onTransition,
 
       {bug.description ? <p className="mt-2 text-xs text-forge-muted">{bug.description}</p> : null}
 
+      {bug.errorMessage ? (
+        <pre className="mt-2 overflow-x-auto rounded-md border border-signal-danger/25 bg-forge-900 p-2 font-mono text-[11px] text-signal-danger">
+          {bug.errorMessage}
+        </pre>
+      ) : null}
+      {bug.consoleLog ? (
+        <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-forge-700 bg-forge-900 p-2 font-mono text-[11px] text-forge-muted">
+          {bug.consoleLog}
+        </pre>
+      ) : null}
+
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-forge-faint">
         {bug.module ? <span>Module: {bug.module}</span> : null}
         <span>Priority: {bug.priority}</span>
@@ -349,18 +388,24 @@ function BugRow({ bug, users, usersById, canTransition, canManage, onTransition,
         )}
 
         {canTransition
-          ? transitions.map((t) => (
-              <button
-                key={t.to}
-                type="button"
-                onClick={() => onTransition(bug, t.to)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-forge-600 px-2.5 py-1.5 text-xs font-medium text-forge-muted transition hover:bg-forge-850 hover:text-forge-text"
-              >
-                {t.to === 'CLOSED' ? <CheckCircle2 className="h-3.5 w-3.5 text-signal-success" aria-hidden /> : null}
-                {t.to === 'REOPENED' ? <RotateCcw className="h-3.5 w-3.5 text-signal-danger" aria-hidden /> : null}
-                {t.label}
-              </button>
-            ))
+          ? transitions.map((t) => {
+              // "Assigned" step: a confirmed bug needs an assignee before work starts.
+              const needsAssignee = bug.status === 'CONFIRMED' && !bug.assignedTo
+              return (
+                <button
+                  key={t.to}
+                  type="button"
+                  disabled={needsAssignee}
+                  title={needsAssignee ? 'Assign someone before starting work' : undefined}
+                  onClick={() => onTransition(bug, t.to)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-forge-600 px-2.5 py-1.5 text-xs font-medium text-forge-muted transition hover:bg-forge-850 hover:text-forge-text disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {t.to === 'CLOSED' ? <CheckCircle2 className="h-3.5 w-3.5 text-signal-success" aria-hidden /> : null}
+                  {t.to === 'REOPENED' ? <RotateCcw className="h-3.5 w-3.5 text-signal-danger" aria-hidden /> : null}
+                  {t.label}
+                </button>
+              )
+            })
           : null}
       </div>
     </li>

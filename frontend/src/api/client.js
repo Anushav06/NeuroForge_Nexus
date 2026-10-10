@@ -595,13 +595,7 @@ export const taskApi = {
 //   GET  /projects/{projectId}/deployments         → Deployment[] (buildId links deployment → build)
 //   POST /deployments/{deploymentId}/rollback      body { rollbackReason }
 //
-// Responses are mapped into the historical mock shapes so Pipelines.jsx needs
-// no changes. The original in-memory mock generators are kept below, renamed
-// with a `mock` prefix; set USE_MOCK_PIPELINES = true to fall back to them
-// (useful for UI work while cicd-service is down).
-
-// Flip to true to serve the Pipelines page from the mock generators below.
-const USE_MOCK_PIPELINES = false;
+// Responses are mapped into the shape Pipelines.jsx expects.
 
 // ── cicd-service → UI shape mapping helpers ─────────────────
 // The UI stage tracker knows PASSED / FAILED / PENDING; the backend uses
@@ -629,6 +623,8 @@ const mapBuildForUi = (build) => ({
     name: stage?.name ?? 'unknown',
     status: toUiStageStatus(stage?.status),
   })),
+  // Passed through so the Pipelines page can show the test result summary.
+  testResult: build?.testResult ?? null,
 });
 
 // Spring Page<T> responses arrive as { content: [...] }; plain lists as [...].
@@ -655,7 +651,6 @@ const buildProjectIndex = new Map();
 export async function fetchPipelines(projectId) {
   const pId = extractId(projectId);
   if (!pId) return [];
-  if (USE_MOCK_PIPELINES) return mockFetchPipelines(pId);
 
   const pipelines = asArray(await requestCicd(`/projects/${pId}/pipelines`));
 
@@ -695,7 +690,6 @@ export async function fetchPipelines(projectId) {
 export async function fetchPipelineStats(projectId) {
   const pId = extractId(projectId);
   if (!pId) return { buildsToday: 0, successRatePercent: 0, avgDeploySeconds: 0 };
-  if (USE_MOCK_PIPELINES) return mockFetchPipelineStats(pId);
 
   try {
     // { buildsPerDay, successRate, avgDeployMinutes, deployTrendPercent }
@@ -714,7 +708,6 @@ export async function fetchPipelineStats(projectId) {
 export async function triggerRollback(buildOrId, maybeProjectId) {
   const bId = extractId(buildOrId);
   if (!bId) throw new Error('Build ID is required for rollback.');
-  if (USE_MOCK_PIPELINES) return mockTriggerRollback(bId);
 
   // The page passes only build.id; resolve its project from the index
   // (populated by fetchPipelines) or from an explicitly passed project.
@@ -754,209 +747,6 @@ export async function triggerRollback(buildOrId, maybeProjectId) {
   };
 }
 
-const PIPELINE_MOCK_DELAY = 150;
-const pipelineSleep = (ms = PIPELINE_MOCK_DELAY) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-export const PIPELINE_STAGES = ["Build", "Test", "Sonar", "Docker", "Deploy"];
-export const BUILD_STATUSES = ["SUCCESS", "FAILED", "RUNNING"];
-
-// Independent in-memory dataset (resets on page refresh, like the old mocks).
-let mockPipelines = [];
-
-// ── Deterministic PRNG helpers ──────────────────────────────
-// Seeding from the projectId keeps every project's demo build history stable
-// across re-fetches within a session.
-const hashSeed = (str) => {
-  let h = 2166136261;
-  const s = String(str);
-  for (let i = 0; i < s.length; i += 1) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-};
-
-const mulberry32 = (seed) => {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-};
-
-const BRANCH_POOL = [
-  "main",
-  "develop",
-  "feature/ci-pipeline",
-  "feature/auth-refactor",
-  "release/v2.4",
-  "hotfix/token-expiry",
-  "feature/kanban-drag",
-];
-const COMMIT_MESSAGE_POOL = [
-  "feat: wire pipeline stage runner to queue",
-  "fix: flaky checkout integration test",
-  "chore: bump node to 22.4 in CI image",
-  "feat: sonar gate blocks deploy on hotspots",
-  "refactor: extract docker build layer cache",
-  "fix: rollback grabs last green build",
-  "feat: parallel test shards for build stage",
-  "docs: add pipeline runbook",
-];
-const TRIGGER_POOL = [
-  "Maneesh R",
-  "Mir Mohammed Kazim",
-  "Elena Vasquez",
-  "Marcus Lee",
-  "Tomiwa Okafor",
-  "Ravi Menon",
-];
-
-const buildStages = (rand, buildStatus) => {
-  if (buildStatus === "SUCCESS") {
-    return PIPELINE_STAGES.map((name) => ({ name, status: "PASSED" }));
-  }
-  if (buildStatus === "FAILED") {
-    const failedAt = Math.floor(rand() * PIPELINE_STAGES.length);
-    return PIPELINE_STAGES.map((name, i) => ({
-      name,
-      status: i < failedAt ? "PASSED" : i === failedAt ? "FAILED" : "PENDING",
-    }));
-  }
-  // RUNNING — every stage up to the current one passed, the rest is pending.
-  const currentAt = Math.floor(rand() * PIPELINE_STAGES.length);
-  return PIPELINE_STAGES.map((name, i) => ({
-    name,
-    status: i < currentAt ? "PASSED" : "PENDING",
-  }));
-};
-
-// Lazily populates the mock dataset the first time a project is queried, so
-// any real (backend-seeded) projectId gets a plausible recent build history.
-const seedPipelinesForProject = (projectId) => {
-  if (mockPipelines.some((b) => b.projectId === projectId)) return;
-
-  const rand = mulberry32(hashSeed(projectId));
-  const buildCount = 4 + Math.floor(rand() * 3); // 4–6 recent builds
-  const now = Date.now();
-  let activeDeploymentAssigned = false;
-
-  for (let i = 0; i < buildCount; i += 1) {
-    const roll = rand();
-    let status;
-    if (i === 0 && roll < 0.35) {
-      status = "RUNNING"; // only the newest build may still be in flight
-    } else {
-      status = roll < 0.82 ? "SUCCESS" : "FAILED";
-    }
-
-    const hoursAgo = 1.5 + i * (16 + rand() * 26);
-    const startedAt = new Date(now - hoursAgo * 3600 * 1000).toISOString();
-
-    const durationSeconds =
-      status === "FAILED"
-        ? 60 + Math.floor(rand() * 440) // failed builds stop partway through
-        : 180 + Math.floor(rand() * 720);
-
-    const build = {
-      id: `BLD-${projectId}-${i + 1}`,
-      projectId,
-      branch: BRANCH_POOL[Math.floor(rand() * BRANCH_POOL.length)],
-      commitMessage:
-        COMMIT_MESSAGE_POOL[Math.floor(rand() * COMMIT_MESSAGE_POOL.length)],
-      commitHash: Math.floor(rand() * 0xfffffff)
-        .toString(16)
-        .padStart(7, "0"),
-      status,
-      triggeredBy: TRIGGER_POOL[Math.floor(rand() * TRIGGER_POOL.length)],
-      startedAt,
-      durationSeconds,
-      stages: buildStages(rand, status),
-      // The newest SUCCESS build serves traffic; Rollback flips this flag.
-      isActiveDeployment: false,
-    };
-
-    if (status === "SUCCESS" && !activeDeploymentAssigned) {
-      build.isActiveDeployment = true;
-      activeDeploymentAssigned = true;
-    }
-
-    mockPipelines.push(build);
-  }
-};
-
-export async function mockFetchPipelines(projectId) {
-  const pId = extractId(projectId);
-  await pipelineSleep();
-  if (!pId) return [];
-  seedPipelinesForProject(pId);
-  return mockPipelines
-    .filter((b) => b.projectId === pId)
-    .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
-    .map((b) => ({ ...b, stages: b.stages.map((s) => ({ ...s })) }));
-}
-
-export async function mockFetchPipelineStats(projectId) {
-  const pId = extractId(projectId);
-  await pipelineSleep();
-  if (!pId) {
-    return { buildsToday: 0, successRatePercent: 0, avgDeploySeconds: 0 };
-  }
-  seedPipelinesForProject(pId);
-
-  const builds = mockPipelines.filter((b) => b.projectId === pId);
-  const today = new Date().toDateString();
-  const finished = builds.filter((b) => b.status !== "RUNNING");
-  const successes = finished.filter((b) => b.status === "SUCCESS");
-
-  return {
-    buildsToday: builds.filter(
-      (b) => new Date(b.startedAt).toDateString() === today,
-    ).length,
-    successRatePercent: finished.length
-      ? Math.round((successes.length / finished.length) * 100)
-      : 0,
-    avgDeploySeconds: successes.length
-      ? Math.round(
-          successes.reduce((sum, b) => sum + b.durationSeconds, 0) /
-            successes.length,
-        )
-      : 0,
-  };
-}
-
-export async function mockTriggerRollback(buildId) {
-  const bId = extractId(buildId);
-  await pipelineSleep();
-
-  const build = mockPipelines.find((b) => b.id === bId);
-  if (!build) throw new Error("Build not found.");
-  if (build.status !== "SUCCESS") {
-    throw new Error("Only successful builds can be rolled back to.");
-  }
-  if (build.isActiveDeployment) {
-    throw new Error("This build is already the active deployment.");
-  }
-
-  // Flip: the chosen build becomes the active deployment; its project's
-  // previous deployment stands down.
-  mockPipelines.forEach((b) => {
-    if (b.projectId === build.projectId) {
-      b.isActiveDeployment = b.id === bId;
-    }
-  });
-
-  return {
-    ...build,
-    stages: build.stages.map((s) => ({ ...s })),
-    isActiveDeployment: true,
-    message: `Rolled back to build ${build.commitHash} on ${build.branch}.`,
-  };
-}
-
 export const pipelineApi = {
   // Live cicd-service functions (default path).
   getPipelines: fetchPipelines,
@@ -964,13 +754,6 @@ export const pipelineApi = {
   getPipelineStats: fetchPipelineStats,
   fetchPipelineStats,
   triggerRollback,
-  // Original mock generators, kept as a fallback (USE_MOCK_PIPELINES or
-  // direct import when cicd-service is unavailable).
-  mockGetPipelines: mockFetchPipelines,
-  mockFetchPipelines,
-  mockGetPipelineStats: mockFetchPipelineStats,
-  mockFetchPipelineStats,
-  mockTriggerRollback,
 };
 
 // =========================================================

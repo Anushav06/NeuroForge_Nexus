@@ -14,7 +14,7 @@ Two backend services are used:
 | user-service | 8081 | auth, users, projects, teams, sprints, tasks, dashboard stats |
 | cicd-service | 8083 | pipelines, builds, deployments, releases, health metrics      |
 
-Last updated: 2026-09-28.
+Last updated: 2026-10-10.
 
 ---
 
@@ -26,7 +26,7 @@ Last updated: 2026-09-28.
 | M2 — Sprint & Task Mgmt   | Sprints (List / Calendar / Timeline), Sprint board (Kanban) | Live (user-service)          |
 | M3 — CI/CD Pipeline       | Pipelines (builds, stage tracker, rollback)                 | Live (cicd-service)          |
 | M4 — Release & Monitoring | Releases, Deployments, Monitoring                           | Live (cicd-service)          |
-| Extras                    | AI Assistant (floating), Repository (GitHub)                | **Placeholders — see below** |
+| Extras                    | Bug Reports, AI Assistant (floating), Repository (GitHub)   | **Placeholders — see below** |
 
 Full create / edit / delete is wired for Teams, Projects, Sprints, Tasks and
 Releases. Deployments support deploy and rollback.
@@ -137,8 +137,9 @@ dropdown on their own tasks only. Assignee names are resolved from
 
 **Pipelines (M3)** — org-wide stats, per-project expandable build lists with
 stage tracker (Build → Test → Sonar → Docker → Deploy), Rollback for managers.
-Served from cicd-service; a mock fallback is kept in `client.js`
-(`USE_MOCK_PIPELINES`, default `false`).
+Served from cicd-service; the old `USE_MOCK_PIPELINES` mock fallback has been
+removed from `client.js`, so the page is live-only (stats and build lists
+degrade to zeros / empty while cicd-service is down).
 
 **Releases (M4)** — per-project release list with status pills
 (DRAFT / RELEASED / ROLLED_BACK), New / Edit release, Publish, and a changelog
@@ -160,6 +161,8 @@ Pipeline / Build / Deployment data, so this page is pipeline-health-centric.
 language and answers simple questions from already-fetched data.
 **Heuristic placeholder** (`askAssistant()` in `client.js`), not a real LLM.
 
+**Bug Reports** — **mock only** (local state), see next section.
+
 ## Placeholders (not real integrations yet)
 
 - **Repository page (`/repository`)** — Connect GitHub, commit feed, PR list
@@ -167,6 +170,19 @@ language and answers simple questions from already-fetched data.
   refresh. A banner on the page says so. A real version needs a GitHub OAuth
   App, a webhook receiver endpoint, and repository storage on the backend.
   When those exist, replace the mock data in `Repository.jsx`; the UI stays.
+- **Bug Reports page (`/bugs`)** — report a bug against a project. Fields:
+  title, description, project, module, environment, severity, priority,
+  status, reported by (automatic), assigned to, created date (automatic).
+  Error message and console log are pasted text stored on the bug;
+  screenshots, recordings, logs and other files keep file names only
+  (name/size — no upload endpoint exists). Workflow: NEW → CONFIRMED
+  (triage) → assign → IN_PROGRESS → FIXED → RETEST → CLOSED / REOPENED
+  (REOPENED goes back to IN_PROGRESS). A CONFIRMED bug cannot be started
+  until someone is assigned (assignment is a manager-only control), and
+  only a manager (ADMIN, PROJECT_LEAD, PROJECT_MANAGER) or the assignee
+  can change a bug's status. All data is local React state and resets on
+  refresh. The intended backend API shape is documented in the header of
+  `BugReports.jsx`.
 - **AI Assistant** — swap the body of `askAssistant()` for a call to the
   backend's LLM endpoint. The reply shape (`{ type, reply, prefill? }`) is
   already final.
@@ -198,14 +214,14 @@ frontend/src/
 ├── pages/
 │   ├── Login  Register  Dashboard  Projects  Teams  TeamDetail
 │   ├── Sprints  SprintBoard
-│   ├── Pipelines  Releases  Deployments  Monitoring  Repository
+│   ├── Pipelines  Releases  Deployments  Monitoring  Repository  BugReports
 ├── index.css              ← Tailwind v4 @theme design tokens
 ├── App.jsx                ← route map
 └── main.jsx               ← providers (BrowserRouter + AuthProvider)
 ```
 
 Routes: `/`, `/projects`, `/sprints`, `/sprints/:sprintId`, `/pipelines`,
-`/releases`, `/deployments`, `/monitoring`, `/repository`, `/teams`,
+`/releases`, `/deployments`, `/monitoring`, `/repository`, `/bugs`, `/teams`,
 `/teams/:teamId`, plus public `/login` and `/register`.
 
 ## How `client.js` is organized
@@ -344,11 +360,37 @@ Confirmed from the controller and model source, not speculation.
 11. **Real GitHub integration** (OAuth App + webhook receiver + repo storage)
     to replace the Repository page mock.
 
+---
+
+## cicd-service changes (frontend developer)
+
+Commit `e54d1d8` on branch `fix/cicd-integration` (merged into `main`,
+2026-09-25) — *"Fix CI/CD backend security/logging, add test result display,
+Team/Project/Sprint edit-delete features, clean up gitignore"*. Its
+`backend/cicd-service` scope, per file:
+
+| File | What changed | Why | Committed? |
+| ---- | ------------ | --- | ---------- |
+| `config/JwtAuthFilter.java` | JWT validation rebuilt around `extractClaims()`; every failure type (expired / bad signature / malformed / unsupported / invalid) logged as a WARN with the request URI; DEBUG log for requests without a token; WARN when a valid token carries no role claim | Security/logging fix — JWT rejections used to be silent; signature failures now hint at a `JWT_SECRET` mismatch between the two services | Yes |
+| `config/SecurityConfig.java` | CORS wired into the filter chain: new `CorsConfigurationSource` bean (local Vite origins 5173 / 5174 / 3000, `127.0.0.1:*`, standard methods and headers, credentials allowed, 1 h preflight cache) so OPTIONS preflights are answered instead of rejected as unauthenticated | Security fix — the frontend dev origins were being blocked | Yes |
+| `controller/BuildController.java` | `DEVOPS` → `TEAM_LEAD` in `@PreAuthorize` on all 9 endpoints (trigger, builds, single build, logs, cancel, retry, stage update, save + get test-results) | Align role lists with the roles the app actually has | Yes |
+| `controller/PipelineController.java` | Same rename on all 6 pipeline endpoints | Same | Yes |
+| `controller/DeploymentController.java` | `@PreAuthorize` added to all 7 endpoints (deploy / health / rollback = manager tier; list / get / current / rollback history also allow `EMPLOYEE`) | Security fix — these endpoints previously had no checks | Yes |
+| `controller/ReleaseController.java` | `@PreAuthorize` added to all 6 endpoints (create / update / publish = manager tier; reads also allow `EMPLOYEE`) | Same | Yes |
+| `controller/HealthMetricsController.java` | `DEVOPS` → `TEAM_LEAD` on `getCoverageTrend` | Same | Yes |
+| `config/SecurityConfig.java` (working tree) | Merge-conflict cleanup: removed the commented-out legacy config, a duplicated dead filter chain and a stray conflict hash line left behind by `5278d34`; `.cors(...)` moved back inside the single live chain | Repair the file the Sep 29 merge resolution broke | **No — uncommitted** |
+
+Also uncommitted in the same area: `frontend/src/api/client.js` no longer
+contains `USE_MOCK_PIPELINES` or the `mock…` pipeline generators (see Notes),
+and the `TestResultSummary` on the Pipelines page is still inert because
+`mapBuildForUi()` doesn't pass `testResult` through (action item 9).
+
 ## Notes
 
-- Pipeline mock generators are still in `client.js` (renamed `mock…`); set
-  `USE_MOCK_PIPELINES = true` to develop the Pipelines page while cicd-service
-  is down. Everything else calls the real backends.
+- The pipeline mock generators were removed from `client.js`
+  (`USE_MOCK_PIPELINES` and the `mock…` functions no longer exist) — the
+  Pipelines page is live-only and degrades to zeros / empty lists while
+  cicd-service is down. Everything else calls the real backends.
 - Chart colors in Monitoring are approximate hex values of the design tokens
   (recharts needs literal colors).
 - All colors / fonts are Tailwind v4 `@theme` tokens in `src/index.css`
