@@ -2,7 +2,7 @@ package com.neuroforge.user.service;
 
 import com.neuroforge.user.model.Project;
 import com.neuroforge.user.model.Sprint;
-import com.neuroforge.user.model.Team;
+
 import com.neuroforge.user.repository.ProjectRepository;
 import com.neuroforge.user.repository.SprintRepository;
 import com.neuroforge.user.repository.TeamRepository;
