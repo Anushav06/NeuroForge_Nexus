@@ -1,0 +1,48 @@
+# user-service Deployment + Service (mirrors cicd-deployment.yaml).
+# Pulls the SAME nexus-jwt-secret that cicd-service uses, so tokens issued
+# by user-service always verify in cicd-service in every environment.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: production
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-service
+        image: neuroforge/user-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8081
+        env:
+        - name: MONGO_URI
+          value: "mongodb://mongo:27017/nexus_user_db"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:29092"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: nexus-jwt-secret
+              key: jwt-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: production
+spec:
+  selector:
+    app: user-service
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081
+  type: ClusterIP

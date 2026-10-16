@@ -1,0 +1,4 @@
+.idea/
+target/
+backend.zip
+Backend_API/git rm -r --cached backend/.idea

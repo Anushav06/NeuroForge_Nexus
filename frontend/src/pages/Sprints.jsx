@@ -1,13 +1,28 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, CalendarRange, FolderKanban } from 'lucide-react'
+import {
+  ArrowRight,
+  CalendarDays,
+  CalendarRange,
+  FolderKanban,
+  GanttChartSquare,
+  List,
+} from 'lucide-react'
 import { fetchProjects, fetchSprints, fetchTasksBySprint, isSprintActive } from '../api/client'
 import { EmptyState, PageHeader, ProgressBar } from '../components/ui'
+import { SprintCalendar, SprintTimeline } from '../components/SprintViews'
 
 const formatDate = (iso) =>
   iso
     ? new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : '—'
+
+/* Jira-style view switcher: which tab renders below the header. */
+const VIEW_TABS = [
+  { key: 'list', label: 'List', icon: List },
+  { key: 'calendar', label: 'Calendar', icon: CalendarDays },
+  { key: 'timeline', label: 'Timeline', icon: GanttChartSquare },
+]
 
 function SprintsSkeleton() {
   return (
@@ -69,6 +84,7 @@ export default function Sprints() {
   const [progressBySprint, setProgressBySprint] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [view, setView] = useState('list')
 
   useEffect(() => {
     let cancelled = false
@@ -127,8 +143,37 @@ export default function Sprints() {
 
   return (
     <div>
-      <PageHeader title="Sprints" subtitle="Time-boxed iterations across every project." />
+      <PageHeader title="Sprints" subtitle="Time-boxed iterations across every project.">
+        {/* View switcher — List / Calendar / Timeline */}
+        <div
+          role="tablist"
+          aria-label="Sprint view"
+          className="flex items-center gap-1 rounded-lg border border-forge-700 bg-forge-900 p-1"
+        >
+          {VIEW_TABS.map(({ key, label, icon: Icon }) => {
+            const selected = view === key
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setView(key)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ember-500/60 ${
+                  selected
+                    ? 'bg-ember-500/15 text-ember-400'
+                    : 'text-forge-muted hover:bg-forge-850 hover:text-forge-text'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden />
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </PageHeader>
 
+      {/* Loading / error / empty states are shared across all three views. */}
       {error ? (
         <EmptyState icon={FolderKanban} title="Couldn't load sprints" message={error} />
       ) : loading ? (
@@ -139,6 +184,10 @@ export default function Sprints() {
           title="No sprints yet"
           message="Sprints created for a project will show up here."
         />
+      ) : view === 'calendar' ? (
+        <SprintCalendar sprints={safeSprints} />
+      ) : view === 'timeline' ? (
+        <SprintTimeline sprints={safeSprints} />
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {safeSprints.map((sprint) => {

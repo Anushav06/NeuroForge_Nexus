@@ -1,13 +1,35 @@
 # NeuroForge Nexus — Frontend
 
-**Milestone 1: Project & User Management**
+**Milestones 1–4: Project Management, Sprints, CI/CD Pipelines, Releases & Monitoring**
 
 Dark "forge / foundry" themed SDLC & project-management frontend. Built with
-React 19 + Vite, React Router, Tailwind CSS v4 (`@tailwindcss/vite`), Axios and
-lucide-react. Backend split: **Milestone 1** (auth, users, projects, teams,
-dashboard) calls the **real Spring Boot backend via axios**; **Milestone 2**
-(sprints, tasks) still runs on the in-memory mock layer until the backend
-ships those endpoints.
+React 19 + Vite, React Router, Tailwind CSS v4 (`@tailwindcss/vite`), recharts
+and lucide-react. All API calls use plain `fetch` (no Axios) through one file:
+`src/api/client.js`.
+
+Two backend services are used:
+
+| Service      | Port | Covers                                                        |
+| ------------ | ---- | ------------------------------------------------------------- |
+| user-service | 8081 | auth, users, projects, teams, sprints, tasks, dashboard stats |
+| cicd-service | 8083 | pipelines, builds, deployments, releases, health metrics      |
+
+Last updated: 2026-10-10.
+
+---
+
+## Status at a glance
+
+| Milestone                 | Pages                                                       | Data                         |
+| ------------------------- | ----------------------------------------------------------- | ---------------------------- |
+| M1 — Project & User Mgmt  | Login, Register, Dashboard, Projects, Teams, Team detail    | Live (user-service)          |
+| M2 — Sprint & Task Mgmt   | Sprints (List / Calendar / Timeline), Sprint board (Kanban) | Live (user-service)          |
+| M3 — CI/CD Pipeline       | Pipelines (builds, stage tracker, rollback)                 | Live (cicd-service)          |
+| M4 — Release & Monitoring | Releases, Deployments, Monitoring                           | Live (cicd-service)          |
+| Extras                    | Bug Reports, AI Assistant (floating), Repository (GitHub)   | **Placeholders — see below** |
+
+Full create / edit / delete is wired for Teams, Projects, Sprints, Tasks and
+Releases. Deployments support deploy and rollback.
 
 ---
 
@@ -19,412 +41,358 @@ npm install
 npm run dev      # → http://localhost:5173
 ```
 
-Other scripts: `npm run build` (production build → `dist/`), `npm run preview`,
-`npm run lint` (oxlint).
+Other scripts: `npm run build` (→ `dist/`), `npm run preview`, `npm run lint`.
+
+`frontend/.env` needs **both** service URLs:
+
+```
+VITE_API_URL=http://localhost:8081
+VITE_CICD_API_URL=http://localhost:8083
+```
 
 ## Running the full stack locally
 
-The backend infrastructure requires **Docker Desktop running** — it provides
-MongoDB, Kafka, Zookeeper and Keycloak via `infra/docker-compose.yml`.
+Start in this order (Docker Desktop must be running):
 
-1. Start the infrastructure:
-
+1. **Infrastructure** (MongoDB, Zookeeper, Kafka):
    ```bash
    cd infra
-   docker compose up
+   docker-compose up -d mongodb zookeeper kafka
+   docker ps      # nexus-kafka must say "Up"
    ```
-
-2. Run the backend: open `backend/user-service` in IntelliJ and run
-   `UserServiceApplication.java` — it listens on **http://localhost:8081**.
-
-3. Run the frontend:
-
-   ```bash
-   cd frontend
-   npm run dev      # → http://localhost:5173
+   If `nexus-kafka` shows `Exited`, it started before Zookeeper was ready:
+   run `docker start nexus-kafka`. While Kafka is down, creating or updating
+   tasks hangs and the user-service log fills with
+   `Connection to node -1 (localhost:9092) could not be established`.
+2. **user-service** (PowerShell, in `backend/user-service`):
+   ```powershell
+   $env:MONGO_URI="mongodb://localhost:27017/nexus_user_db"
+   $env:JWT_SECRET="<dev secret>"
+   .\mvnw.cmd spring-boot:run
    ```
+3. **cicd-service** (separate terminal, in `backend/cicd-service`):
+   ```powershell
+   $env:MONGO_URI="mongodb://localhost:27017/nexus_cicd_db"
+   $env:JWT_SECRET="<same dev secret as user-service>"
+   .\mvnw.cmd spring-boot:run
+   ```
+   `JWT_SECRET` must be identical in both terminals, otherwise cicd-service
+   rejects tokens issued by user-service.
+4. **Frontend**: `npm run dev`.
 
 ## Demo credentials
 
-<!-- TODO(backend-team): Milestone 1 auth now hits the real backend — confirm
-     the DataSeeder seeds the same demo accounts (same emails, same password
-     forge123) as listed below, and flag any mismatch here. -->
+Login as **admin@neuroforge.dev** / **forge123** (ADMIN). Other seeded accounts
+come from `DataSeeder.java` in user-service. You can also register new accounts
+from the login page (pick any role) — e.g. register a Developer or Team Member
+to see the contributor experience.
 
-All seeded accounts share the password **`forge123`**.
-(The Login page shows this hint and has a one-click _"Fill demo credentials"_ button.)
+---
 
-These credentials are expected to work against the **real backend** now —
-provided the backend seeds the same demo accounts (see TODO above).
+## Role-based access (frontend)
 
-| Email                           | Role            | Sub-role  |
-| ------------------------------- | --------------- | --------- |
-| `admin@neuroforge.dev`          | ADMIN           | —         |
-| `marcus.lee@neuroforge.dev`     | PROJECT_LEAD    | —         |
-| `elena.vasquez@neuroforge.dev`  | PROJECT_MANAGER | —         |
-| `tomiwa.okafor@neuroforge.dev`  | TEAM_LEAD       | —         |
-| `ravi.menon@neuroforge.dev`     | EMPLOYEE        | Developer |
-| `sara.lindqvist@neuroforge.dev` | EMPLOYEE        | Tester    |
-| `daniel.cho@neuroforge.dev`     | EMPLOYEE        | Senior    |
-| `amara.diallo@neuroforge.dev`   | EMPLOYEE        | Junior    |
+Two tiers, applied on every page. This mirrors what the backend's
+`@PreAuthorize` checks actually accept, so the UI never offers an action the
+API would reject.
 
-- Log in as **admin@neuroforge.dev** to see everything, including the
-  admin-only user table on the Teams page and the "New project" button.
-- Log in as **ravi.menon@neuroforge.dev** to see the EMPLOYEE experience —
-  the dashboard shows **"My Projects"** (personal stats) instead of
-  "Active Projects".
-- You can also **register** new accounts; choosing EMPLOYEE reveals the
-  sub-role dropdown (Developer / Tester / Junior / Senior).
+| Tier             | Roles                                | Can do                                                                                                                                                          |
+| ---------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Managers**     | ADMIN, PROJECT_LEAD, PROJECT_MANAGER | Create / edit / delete teams, projects, sprints, tasks. Publish releases. Deploy and roll back. Roll back builds. ADMIN also sees the all-users table on Teams. |
+| **Contributors** | DEVELOPER, DESIGNER, QA, EMPLOYEE    | View everything. Change the status of tasks **assigned to them** (`task.assignedTo === user.id`). Nothing else.                                                 |
+
+Dashboard by tier:
+
+- Managers: org-wide stat cards and the "All Projects" table.
+- Contributors: "My Dashboard" with a **My Tasks** board (their assigned tasks
+  across every project, grouped To Do / In Progress / Done). There is no
+  "tasks assigned to me" endpoint, so this fetches each project's tasks and
+  filters client-side.
+
+Gating is done with `useAuth().hasRole(...)` inside each page. The frontend
+only hides controls — real enforcement must be on the backend (see action
+items).
+
+---
 
 ## What's implemented
 
-- Login / Register (session persisted in `sessionStorage`)
-- Persistent left sidebar layout, protected routes (`→ /login` when signed out)
-- Dashboard: stat cards (Active Projects / My Projects, Total Users, Total
-  Teams) + projects table with status pills
-- Projects: card grid + role-gated "New project" modal
-  (ADMIN / PROJECT_LEAD / PROJECT_MANAGER only)
-- Teams: team cards with member rosters, per-team project rollups + admin-only full user table
-- Sprints & Kanban board (Milestone 2): sprint list with per-sprint progress, three-column
-  board (To Do / In Progress / Done), task creation restricted to ADMIN / PROJECT_LEAD /
-  PROJECT_MANAGER, and EMPLOYEEs updating the status of their own tasks
-- Roles: `ADMIN`, `PROJECT_LEAD`, `PROJECT_MANAGER`, `TEAM_LEAD`, `EMPLOYEE`
-  (+ sub-role for EMPLOYEE only)
+**Auth & shell** — Login / Register (session in `sessionStorage`), protected
+routes, persistent sidebar, mobile top bar.
+
+**Dashboard** — manager and contributor views (above). Team, lead and members
+are resolved from IDs using `/teams` and `/users`.
+
+**Projects** — card grid, New / Edit / Delete (managers), auto-fills the lead
+from the selected team, "View board" link to the active sprint.
+
+**Teams** — team cards with lead, members and project rollups, status pie
+chart, New team (managers), admin-only user directory. Team detail page with
+Edit / Delete (delete is blocked while projects still use the team).
+
+**Sprints & Kanban** — List / Calendar / Timeline views. Sprint board with
+To Do / In Progress / Done columns, velocity and burndown cards, Add task,
+Edit / Delete sprint and Delete task (managers). Contributors get a status
+dropdown on their own tasks only. Assignee names are resolved from
+`task.assignedTo` via the users list.
+
+**Pipelines (M3)** — org-wide stats, per-project expandable build lists with
+stage tracker (Build → Test → Sonar → Docker → Deploy), Rollback for managers.
+Served from cicd-service; the old `USE_MOCK_PIPELINES` mock fallback has been
+removed from `client.js`, so the page is live-only (stats and build lists
+degrade to zeros / empty while cicd-service is down).
+
+**Releases (M4)** — per-project release list with status pills
+(DRAFT / RELEASED / ROLLED_BACK), New / Edit release, Publish, and a changelog
+viewer.
+
+**Deployments (M4)** — current DEV / STAGING / PROD status per project,
+deployment history with CPU / memory / replica info, Deploy modal with a real
+picker of successful builds and an environment choice, Rollback with a
+required reason.
+
+**Monitoring (M4)** — per-project CI/CD stats, per-pipeline health pill,
+success-rate trend chart and test-coverage trend chart (recharts). There is
+no separate HealthMetric model on the backend; health is computed from
+Pipeline / Build / Deployment data, so this page is pipeline-health-centric.
+
+**Repository (GitHub)** — **mock only**, see next section.
+
+**AI Assistant** — floating chat panel. Creates projects from natural
+language and answers simple questions from already-fetched data.
+**Heuristic placeholder** (`askAssistant()` in `client.js`), not a real LLM.
+
+**Bug Reports** — **mock only** (local state), see next section.
+
+## Placeholders (not real integrations yet)
+
+- **Repository page (`/repository`)** — Connect GitHub, commit feed, PR list
+  and webhook status are all simulated from seeded sample data, and reset on
+  refresh. A banner on the page says so. A real version needs a GitHub OAuth
+  App, a webhook receiver endpoint, and repository storage on the backend.
+  When those exist, replace the mock data in `Repository.jsx`; the UI stays.
+- **Bug Reports page (`/bugs`)** — report a bug against a project. Fields:
+  title, description, project, module, environment, severity, priority,
+  status, reported by (automatic), assigned to, created date (automatic).
+  Error message and console log are pasted text stored on the bug;
+  screenshots, recordings, logs and other files keep file names only
+  (name/size — no upload endpoint exists). Workflow: NEW → CONFIRMED
+  (triage) → assign → IN_PROGRESS → FIXED → RETEST → CLOSED / REOPENED
+  (REOPENED goes back to IN_PROGRESS). A CONFIRMED bug cannot be started
+  until someone is assigned (assignment is a manager-only control), and
+  only a manager (ADMIN, PROJECT_LEAD, PROJECT_MANAGER) or the assignee
+  can change a bug's status. All data is local React state and resets on
+  refresh. The intended backend API shape is documented in the header of
+  `BugReports.jsx`.
+- **AI Assistant** — swap the body of `askAssistant()` for a call to the
+  backend's LLM endpoint. The reply shape (`{ type, reply, prefill? }`) is
+  already final.
+
+## Not built (on purpose)
+
+- **Requirements** and **Testing / TestCase** pages — the spec lists these
+  entities, but neither backend service has any controller for them.
+- Backend endpoints that exist but have no UI yet: build trigger / cancel /
+  retry / logs / test-results, pipeline create / update / delete / enable,
+  and manual deployment health update (`PATCH /deployments/{id}/health`).
+
+---
 
 ## Project structure
 
 ```
 frontend/src/
 ├── api/
-│   └── client.js          ← ★ the ONLY file that talks to a backend
+│   └── client.js          ← the ONLY file that talks to a backend
 ├── context/
-│   └── AuthContext.jsx    ← user + token in sessionStorage
+│   └── AuthContext.jsx    ← user + token in sessionStorage, hasRole()
 ├── components/
 │   ├── ProtectedRoute.jsx ← ProtectedRoute / RoleRoute / PublicOnlyRoute
 │   ├── Layout.jsx         ← sidebar + mobile top bar + <Outlet/>
-│   └── ui.jsx             ← StatusPill, StatCard, Avatar, AuthShell, …
+│   ├── AIAssistant.jsx    ← floating assistant
+│   ├── SprintViews.jsx    ← Calendar + Timeline views
+│   └── ui.jsx             ← StatusPill, StatCard, Avatar, PageHeader, …
 ├── pages/
-│   ├── Login.jsx  Register.jsx  Dashboard.jsx  Projects.jsx  Teams.jsx
-├── index.css              ← Tailwind v4 @theme design tokens (colors/fonts)
+│   ├── Login  Register  Dashboard  Projects  Teams  TeamDetail
+│   ├── Sprints  SprintBoard
+│   ├── Pipelines  Releases  Deployments  Monitoring  Repository  BugReports
+├── index.css              ← Tailwind v4 @theme design tokens
 ├── App.jsx                ← route map
 └── main.jsx               ← providers (BrowserRouter + AuthProvider)
 ```
 
+Routes: `/`, `/projects`, `/sprints`, `/sprints/:sprintId`, `/pipelines`,
+`/releases`, `/deployments`, `/monitoring`, `/repository`, `/bugs`, `/teams`,
+`/teams/:teamId`, plus public `/login` and `/register`.
+
+## How `client.js` is organized
+
+- `request()` → user-service (8081), `requestCicd()` → cicd-service (8083).
+  Both attach `Authorization: Bearer <token>` from storage and throw an
+  `Error` with the backend's `message` field on non-2xx responses.
+- Sections: Auth, Dashboard, Users, Teams, Projects, Sprints, Tasks,
+  Pipelines (M3), Releases, Deployments, Monitoring (M4), AI Assistant.
+- Each area also exports a grouped object (`teamApi`, `releaseApi`, …) and the
+  default export bundles them.
+
 ---
 
-## Backend connection status
+## API contract
 
-Everything backend-related is isolated in **`src/api/client.js`** — pages
-import its functions and never touch axios themselves, so swapping a mock
-body for the real call changes **one file only**.
+Field names below are the real ones from the backend model / DTO classes
+unless marked **unverified**.
 
-**Current connection status:**
+### user-service (8081)
 
-- **LIVE against the real backend — Milestone 1 (functions 1–7):**
-  `loginRequest`, `registerRequest`, `fetchDashboardStats`, `fetchProjects`,
-  `createProject`, `fetchTeams`, `fetchUsers` (auth, users, projects, teams,
-  dashboard) all make real axios calls to `VITE_API_BASE_URL`.
+| Function                                                           | HTTP                | Path                                                                              |
+| ------------------------------------------------------------------ | ------------------- | --------------------------------------------------------------------------------- |
+| `loginRequest` / `registerRequest`                                 | POST                | `/auth/login`, `/auth/register`                                                   |
+| `fetchDashboardStats`                                              | GET                 | `/dashboard/stats`                                                                |
+| `fetchUsers`                                                       | GET                 | `/users`                                                                          |
+| `fetchTeams`, `createTeam`, `updateTeam`, `deleteTeam`             | GET/POST/PUT/DELETE | `/teams`, `/teams/{id}`                                                           |
+| `fetchProjects`, `createProject`, `updateProject`, `deleteProject` | GET/POST/PUT/DELETE | `/projects`, `/projects/{id}`                                                     |
+| `fetchSprints`, `createSprint`, `updateSprint`, `deleteSprint`     | GET/POST/PUT/DELETE | `/projects/{projectId}/sprints[/{id}]`                                            |
+| `fetchTasksByProject`, `fetchTasksBySprint`, `fetchSubtasks`       | GET                 | `/projects/{projectId}/tasks`, `/tasks/sprint/{sprintId}`, `/tasks/{id}/subtasks` |
+| `createTask`, `updateTask` / `updateTaskStatus`, `deleteTask`      | POST/PUT/DELETE     | `/projects/{projectId}/tasks[/{id}]`                                              |
+| `fetchSprintVelocity`, `fetchSprintBurndown`                       | GET                 | `/projects/{projectId}/tasks/sprint/{sprintId}/velocity`, `/burndown`             |
 
-- **Still mock — Milestone 2 (functions 8–11):** `fetchSprints`,
-  `fetchTasksBySprint`, `createTask`, `updateTaskStatus` (sprints, tasks) run
-  on local in-memory data pending the backend endpoints. They will be swapped
-  the same way once those endpoints exist.
-
-The axios instance is already set up: `client.js` exports a configured `http`
-instance that reads the base URL from `import.meta.env.VITE_API_BASE_URL`
-(`frontend/.env`, git-ignored; committed template `.env.example` — default
-`http://localhost:8081`), attaches the `Authorization: Bearer <token>` header
-from sessionStorage, and handles global 401s by clearing the session and
-redirecting to `/login`.
-
-Every function has a `REAL BACKEND:` comment showing the exact replacement
-(the table below covers both the live and pending functions):
-
-| Function                              | Real call                       |
-| ------------------------------------- | ------------------------------- |
-| `loginRequest`                        | `POST /auth/login`              |
-| `registerRequest`                     | `POST /auth/register`           |
-| `fetchDashboardStats(user)`           | `GET /dashboard/stats`          |
-| `fetchProjects(user)`                 | `GET /projects`                 |
-| `createProject(payload)`              | `POST /projects`                |
-| `fetchTeams()`                        | `GET /teams`                    |
-| `fetchUsers()`                        | `GET /users`                    |
-| `fetchSprints(projectId?)`            | `GET /sprints?projectId=…`      |
-| `fetchTasksBySprint(sprintId)`        | `GET /sprints/{sprintId}/tasks` |
-| `createTask(payload)`                 | `POST /tasks`                   |
-| `updateTaskStatus(taskId, newStatus)` | `PATCH /tasks/{taskId}/status`  |
-
-Keep the function names, arguments and return shapes identical and **no
-page or component needs to change**.
-
-## API Contract for Backend Team
-
-Build the endpoints below and the frontend works with zero changes to pages —
-only the mock bodies in `src/api/client.js` get replaced. Field names are
-**exact** and mirror the mock data structure the UI already renders.
-
-**Conventions**
-
-- Base URL comes from `VITE_API_BASE_URL` (see `.env` / `.env.example`).
-- The axios interceptor in `client.js` adds `Authorization: Bearer <token>` to every request.
-- Responses are consumed as-is (`return data` in each swapped function) — no `{ success, data }` envelope; return exactly the JSON shown.
-- Errors: respond `4xx`/`5xx` with `{ "message": "Human-readable reason" }` — the UI prints `err.message` in its form alerts. Any `401` clears the session and redirects to `/login`.
-- **Never include `password` in a returned user object.** Login/register responses are cached verbatim in `sessionStorage`.
-- Dates are `YYYY-MM-DD` strings; empty optional values are `""` (not `null`), except `leadId`/`subRole` which are `null`.
-
-### Shared shapes
-
-**User** (public — password stripped):
+**Task** (verified against `Task.java`):
 
 ```json
 {
-  "id": "USR-0001",
-  "name": "Priya Sharma",
-  "email": "admin@neuroforge.dev",
-  "role": "ADMIN",
-  "subRole": null,
-  "status": "active",
-  "createdAt": "2026-01-12"
-}
-```
-
-- `role` ∈ `ADMIN` | `PROJECT_LEAD` | `PROJECT_MANAGER` | `TEAM_LEAD` | `EMPLOYEE`
-- `subRole` is `null` except for `EMPLOYEE`, where it ∈ `Developer` | `Tester` | `Junior` | `Senior`
-
-**Project** (hydrated — the UI needs the resolved `team`, `lead` and `members`):
-
-```json
-{
-  "id": "PRJ-1036",
-  "name": "Atlas Auth Service",
-  "description": "OAuth2, SSO and session hardening for the platform.",
-  "status": "ACTIVE",
-  "teamId": "TEAM-001",
-  "leadId": "USR-0002",
-  "memberIds": ["USR-0002", "USR-0005", "USR-0007"],
-  "sprint": "Sprint 14",
-  "dueDate": "2026-09-18",
-  "createdAt": "2026-06-01",
-  "team": "Core Forge",
-  "lead": "Marcus Lee",
-  "members": ["…User objects, same shape as above…"]
-}
-```
-
-- `status` ∈ `PLANNING` | `ACTIVE` | `BLOCKED` | `COMPLETED`
-- `leadId` may be `null` → `lead` renders as `"Unassigned"`; `sprint`/`dueDate` may be `""`
-
-**Team** (hydrated):
-
-```json
-{
-  "id": "TEAM-001",
-  "name": "Core Forge",
-  "description": "Platform, auth & core services",
-  "leadId": "USR-0002",
-  "memberIds": ["USR-0002", "USR-0005", "USR-0007"],
-  "lead": "Marcus Lee",
-  "members": ["…User objects, same shape as above…"]
-}
-```
-
-**Task** (hydrated — the UI needs the resolved `assignee` user object):
-
-```json
-{
-  "id": "TSK-2001",
-  "title": "Add refresh-token rotation",
-  "assigneeId": "USR-0005",
-  "storyPoints": 5,
-  "status": "IN_PROGRESS",
-  "priority": "HIGH",
-  "sprintId": "SPR-1001",
-  "assignee": { "…User object, same shape as above…" }
-}
-```
-
-- `status` ∈ `TODO` | `IN_PROGRESS` | `DONE`
-- `priority` ∈ `LOW` | `MEDIUM` | `HIGH` | `URGENT`
-- `assigneeId`/`assignee` may be `null` (the task renders as "Unassigned")
-
-**Sprint** (hydrated — the UI needs the resolved `project` name):
-
-```json
-{
-  "id": "SPR-1001",
-  "projectId": "PRJ-1036",
-  "name": "Sprint 14",
-  "goal": "Ship OAuth2 login and MFA enrollment.",
-  "startDate": "2026-08-24",
-  "endDate": "2026-09-06",
-  "project": "Atlas Auth Service"
-}
-```
-
-### Endpoints
-
-| #   | `client.js` function  | HTTP  | Path                        |
-| --- | --------------------- | ----- | --------------------------- |
-| 1   | `loginRequest`        | POST  | `/auth/login`               |
-| 2   | `registerRequest`     | POST  | `/auth/register`            |
-| 3   | `fetchDashboardStats` | GET   | `/dashboard/stats`          |
-| 4   | `fetchProjects`       | GET   | `/projects`                 |
-| 5   | `createProject`       | POST  | `/projects`                 |
-| 6   | `fetchTeams`          | GET   | `/teams`                    |
-| 7   | `fetchUsers`          | GET   | `/users`                    |
-| 8   | `fetchSprints`        | GET   | `/sprints?projectId=…`      |
-| 9   | `fetchTasksBySprint`  | GET   | `/sprints/{sprintId}/tasks` |
-| 10  | `createTask`          | POST  | `/tasks`                    |
-| 11  | `updateTaskStatus`    | PATCH | `/tasks/{taskId}/status`    |
-
-**1. `loginRequest` → `POST /auth/login`**
-
-Request:
-
-```json
-{ "email": "admin@neuroforge.dev", "password": "forge123" }
-```
-
-Response `200` — signs the user in immediately:
-
-```json
-{
-  "token": "…opaque JWT/session string…",
-  "user": {
-    "id": "USR-0001",
-    "name": "Priya Sharma",
-    "email": "admin@neuroforge.dev",
-    "role": "ADMIN",
-    "subRole": null,
-    "status": "active",
-    "createdAt": "2026-01-12"
-  }
-}
-```
-
-Failure: `401` with `{ "message": "Invalid email or password." }`
-
-**2. `registerRequest` → `POST /auth/register`**
-
-Request:
-
-```json
-{
-  "name": "Ada Lovelace",
-  "email": "ada@neuroforge.dev",
-  "password": "…plaintext, sent over HTTPS…",
-  "role": "EMPLOYEE",
-  "subRole": "Developer"
-}
-```
-
-- `subRole` is `null` unless `role` is `EMPLOYEE`.
-- The form already enforces 8+ characters with a number before submit is allowed.
-
-Response `201` — same shape as login: `{ "token", "user" }` (auto sign-in).
-Failure: `409` with `{ "message": "An account with this email already exists." }`, or `400` with a field-validation message.
-
-**3. `fetchDashboardStats` → `GET /dashboard/stats`**
-
-Response `200`:
-
-```json
-{
-  "scope": "organization",
-  "activeProjects": 3,
-  "myProjects": null,
-  "totalUsers": 8,
-  "totalTeams": 3
-}
-```
-
-- `activeProjects`: org-wide count of projects with `status === "ACTIVE"` (non-EMPLOYEE dashboard card).
-- `myProjects`: count of projects whose `memberIds` include the caller — `null` for non-EMPLOYEE callers; the EMPLOYEE dashboard card ("My Projects") uses this instead.
-
-**4. `fetchProjects` → `GET /projects`**
-
-Response `200` — `Project[]` (hydrated shape). If the caller's `role` is `EMPLOYEE`, return only projects whose `memberIds` include them — the dashboard "My Projects" table and the Projects grid render exactly what you return.
-
-**5. `createProject` → `POST /projects`**
-
-Request:
-
-```json
-{
-  "name": "Phoenix Recovery Tooling",
-  "description": "",
-  "teamId": "TEAM-001",
-  "leadId": null,
-  "status": "PLANNING",
-  "sprint": "Sprint 14",
-  "dueDate": "2026-10-30",
-  "memberIds": ["USR-0005", "USR-0007"]
-}
-```
-
-- `leadId` is `null` when the form leaves the lead "Unassigned".
-- The form blocks submit without `name`/`teamId`, but validate server-side anyway.
-
-Response `201` — the created **Project** (hydrated, same shape as `GET /projects` items); the UI prepends it to the grid.
-Failure: `400` with `{ "message": "Project name is required." }` or `{ "message": "Please choose a team for this project." }`
-
-**6. `fetchTeams` → `GET /teams`**
-
-Response `200` — `Team[]` (hydrated shape above).
-
-**7. `fetchUsers` → `GET /users`**
-
-Response `200` — `User[]`. Powers the admin-only directory table; restrict to callers with `role === "ADMIN"`.
-
-**8. `fetchSprints` → `GET /sprints`**
-
-Optional query: `?projectId=PRJ-1036` scopes the list to one project (the Projects page uses this per card); no query returns every sprint (the Sprints page).
-
-Response `200` — `Sprint[]` (hydrated shape above). The frontend computes "active" from the date range — `startDate ≤ today ≤ endDate` — so return real dates.
-
-**9. `fetchTasksBySprint` → `GET /sprints/{sprintId}/tasks`**
-
-Response `200` — `Task[]` (hydrated shape above), every status included; the Kanban board groups by `status` client-side.
-
-**10. `createTask` → `POST /tasks`**
-
-Request:
-
-```json
-{
-  "sprintId": "SPR-1001",
-  "title": "Add rate limiting to refresh endpoint",
-  "assigneeId": "USR-0005",
+  "id": "6ab8b43fa6c7300cbd6ee14b",
+  "projectId": "PRJ-9E6DC0",
+  "sprintId": "6aad3b485ca8f61d5c5dfb33",
+  "title": "login",
+  "description": null,
+  "assignedTo": "USR-0004",
+  "status": "TODO",
+  "priority": "MEDIUM",
   "storyPoints": 3,
-  "priority": "HIGH",
-  "status": "TODO"
+  "progress": 0,
+  "parentTaskId": null,
+  "blockedByTaskId": null,
+  "blockerReason": null
 }
 ```
 
-- `status` presets the board column the task was created from (defaults `TODO`); `assigneeId` may be `null` ("Unassigned").
-- The form is only reachable by ADMIN / PROJECT_LEAD / PROJECT_MANAGER — **enforce that on the server too**.
+`assignedTo` is a bare user-ID string. There is **no** `assignee` or
+`assigneeId` field and no name hydration — the frontend looks the name up in
+`/users`. `createTask` sends `assignedTo` (not `assigneeId`).
 
-Response `201` — the created **Task** (hydrated); the UI appends it to the board.
-Failure: `400` with `{ "message": "Task title is required." }` / `{ "message": "Story points must be a positive number." }` / invalid priority; `404` with `{ "message": "Sprint not found." }`
+**Project** (raw): `id`, `name`, `description`, `status`
+(`PLANNING | ACTIVE | ON_HOLD | COMPLETED | ARCHIVED` in the UI; `BLOCKED`
+also appears in data), `teamId`, `leadId`, `memberIds[]`, `sprint`, `dueDate`,
+`createdAt`. Team / lead / members are IDs only.
 
-**11. `updateTaskStatus` → `PATCH /tasks/{taskId}/status`**
+**User, Team, Sprint** shapes: **unverified** — the UI reads `id`, `name`,
+`email`, `role`, `subRole` (User); `id`, `name`, `description`, `leadId`,
+`memberIds` (Team); `id`, `name`, `goal`, `startDate`, `endDate`, `status`
+(Sprint).
 
-Request:
+### cicd-service (8083)
 
-```json
-{ "status": "DONE" }
-```
+Roles for reads = ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD, EMPLOYEE.
+Roles for writes = ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD.
 
-Response `200` — the updated **Task** (hydrated).
-Failure: `404` with `{ "message": "Task not found." }`; `400` for an invalid status; **`403` when an EMPLOYEE attempts to move a task not assigned to them** — the UI only shows the control for their own tasks, but the server must re-check ownership per request.
+| Function                             | HTTP       | Path                                                             | Auth         |
+| ------------------------------------ | ---------- | ---------------------------------------------------------------- | ------------ |
+| `fetchPipelines` (composite)         | GET        | `/projects/{projectId}/pipelines`, `/pipelines/{id}/builds`      | read         |
+| `fetchProjectCicdStats`              | GET        | `/projects/{projectId}/cicd/stats`                               | none         |
+| `fetchReleases` / `createRelease`    | GET / POST | `/projects/{projectId}/releases`                                 | read / write |
+| `fetchReleaseById` / `updateRelease` | GET / PUT  | `/releases/{releaseId}`                                          | read / write |
+| `publishRelease`                     | POST       | `/releases/{releaseId}/publish?releasedBy=`                      | write        |
+| `fetchChangelog`                     | GET        | `/releases/{releaseId}/changelog`                                | read         |
+| `deployBuild`                        | POST       | `/builds/{buildId}/deploy` body `{ environment }`                | write        |
+| `fetchProjectDeployments`            | GET        | `/projects/{projectId}/deployments?environment=`                 | read         |
+| `fetchDeploymentById`                | GET        | `/deployments/{deploymentId}`                                    | read         |
+| `fetchCurrentDeployment`             | GET        | `/environments/{env}/current?projectId=`                         | read         |
+| `updateDeploymentHealth`             | PATCH      | `/deployments/{deploymentId}/health`                             | write        |
+| `rollbackDeployment`                 | POST       | `/deployments/{deploymentId}/rollback` body `{ rollbackReason }` | write        |
+| `fetchRollbacks`                     | GET        | `/projects/{projectId}/rollbacks`                                | read         |
+| `fetchPipelineHealth`                | GET        | `/pipelines/{pipelineId}/health`                                 | none         |
+| `fetchPipelineMetrics`               | GET        | `/pipelines/{pipelineId}/metrics?days=`                          | none         |
+| `fetchCoverageTrend`                 | GET        | `/pipelines/{pipelineId}/coverage-trend?last=`                   | read         |
 
-## Notes & assumptions
+Enums: `Release.status` = `DRAFT | RELEASED | ROLLED_BACK`;
+`Deployment.environment` = `DEV | STAGING | PROD`;
+`Deployment.status` = `IN_PROGRESS | DEPLOYED | FAILED | ROLLED_BACK`;
+Build status = `QUEUED | RUNNING | SUCCESS | FAILED | CANCELLED`.
 
-- The mock database lives in memory and **resets on page refresh** — register
-  and log in again after a reload (sessionStorage tokens survive the refresh,
-  so you may need to sign out/in after adding new mock data).
-- Auth tokens are mock strings; `AuthContext` uses `sessionStorage` (swap to
-  `localStorage` there if sessions should survive closing the tab).
-- All colors/fonts are Tailwind v4 `@theme` tokens in `src/index.css`
-  (`forge-*` graphite surfaces, `ember-*` primary accent, `steel-*` secondary,
-  `signal-success/warning/danger` status colors; Space Grotesk / Inter /
-  JetBrains Mono). Restyling never requires touching raw hex in components.
+Build stages come back as `[{ name, status }]`; the UI maps `SUCCESS → PASSED`,
+`FAILED → FAILED`, everything else → `PENDING`. `Pipeline.HealthStatus` values
+are **unverified** — the UI colors `HEALTHY / DEGRADED / WARNING / CRITICAL`
+and shows any other value as a neutral pill.
+
+---
+
+## Backend action items
+
+Confirmed from the controller and model source, not speculation.
+
+1. **Project and Task writes have no auth.** `@PreAuthorize` is commented out
+   on create / update / delete in `ProjectController` and `TaskController`.
+   Anyone can call these APIs directly; the frontend only hides buttons.
+2. **`TEAM_LEAD` role mismatch.** cicd-service `@PreAuthorize` lists accept
+   `TEAM_LEAD`, but the role list in the frontend and registration form has no
+   such role. Today only ADMIN / PROJECT_LEAD / PROJECT_MANAGER pass those
+   checks. Either add TEAM_LEAD as a real role or remove it from the checks.
+3. **`HealthMetricsController`**: `getPipelineHealth`, `getProjectStats` and
+   `getPipelineMetrics` have no `@PreAuthorize`; only `getCoverageTrend` does.
+4. **`SecurityConfig` uses `anyRequest().permitAll()`** in user-service, and
+   several controllers use `@CrossOrigin(origins = "*")`.
+5. **Kafka producer blocks the request when Kafka is down.** Creating or
+   updating a task hangs and the producer retries forever. Catch the send
+   error or set short `max.block.ms` / `delivery.timeout.ms`.
+6. **`GET /dashboard/stats`** returns the org-wide total as `myProjects` for
+   every caller. The frontend no longer depends on it, but it is still wrong.
+7. **`GET /projects` has no role filtering** — every caller receives every
+   project. Team / lead / members are also not hydrated (IDs only).
+8. **Task API has no assignee name.** A response DTO with the assignee's name
+   would replace the client-side lookup.
+9. **Test results never reach the UI.** `Pipelines.jsx` has a
+   `TestResultSummary` that reads `build.testResult`, but `mapBuildForUi()` in
+   `client.js` does not copy `testResult` through. One-line frontend fix:
+   add `testResult: build?.testResult ?? null` to `mapBuildForUi`. The
+   backend already exposes `GET /builds/{buildId}/test-results`.
+10. **Changelog 500?** If `GET /releases/{id}/changelog` returns a 500, check
+    `ReleaseService` — the `ChangelogResponse` DTO itself is a plain
+    getter/constructor class.
+11. **Real GitHub integration** (OAuth App + webhook receiver + repo storage)
+    to replace the Repository page mock.
+
+---
+
+## cicd-service changes (frontend developer)
+
+Commit `e54d1d8` on branch `fix/cicd-integration` (merged into `main`,
+2026-09-25) — *"Fix CI/CD backend security/logging, add test result display,
+Team/Project/Sprint edit-delete features, clean up gitignore"*. Its
+`backend/cicd-service` scope, per file:
+
+| File | What changed | Why | Committed? |
+| ---- | ------------ | --- | ---------- |
+| `config/JwtAuthFilter.java` | JWT validation rebuilt around `extractClaims()`; every failure type (expired / bad signature / malformed / unsupported / invalid) logged as a WARN with the request URI; DEBUG log for requests without a token; WARN when a valid token carries no role claim | Security/logging fix — JWT rejections used to be silent; signature failures now hint at a `JWT_SECRET` mismatch between the two services | Yes |
+| `config/SecurityConfig.java` | CORS wired into the filter chain: new `CorsConfigurationSource` bean (local Vite origins 5173 / 5174 / 3000, `127.0.0.1:*`, standard methods and headers, credentials allowed, 1 h preflight cache) so OPTIONS preflights are answered instead of rejected as unauthenticated | Security fix — the frontend dev origins were being blocked | Yes |
+| `controller/BuildController.java` | `DEVOPS` → `TEAM_LEAD` in `@PreAuthorize` on all 9 endpoints (trigger, builds, single build, logs, cancel, retry, stage update, save + get test-results) | Align role lists with the roles the app actually has | Yes |
+| `controller/PipelineController.java` | Same rename on all 6 pipeline endpoints | Same | Yes |
+| `controller/DeploymentController.java` | `@PreAuthorize` added to all 7 endpoints (deploy / health / rollback = manager tier; list / get / current / rollback history also allow `EMPLOYEE`) | Security fix — these endpoints previously had no checks | Yes |
+| `controller/ReleaseController.java` | `@PreAuthorize` added to all 6 endpoints (create / update / publish = manager tier; reads also allow `EMPLOYEE`) | Same | Yes |
+| `controller/HealthMetricsController.java` | `DEVOPS` → `TEAM_LEAD` on `getCoverageTrend` | Same | Yes |
+| `config/SecurityConfig.java` (working tree) | Merge-conflict cleanup: removed the commented-out legacy config, a duplicated dead filter chain and a stray conflict hash line left behind by `5278d34`; `.cors(...)` moved back inside the single live chain | Repair the file the Sep 29 merge resolution broke | **No — uncommitted** |
+
+Also uncommitted in the same area: `frontend/src/api/client.js` no longer
+contains `USE_MOCK_PIPELINES` or the `mock…` pipeline generators (see Notes),
+and the `TestResultSummary` on the Pipelines page is still inert because
+`mapBuildForUi()` doesn't pass `testResult` through (action item 9).
+
+## Notes
+
+- The pipeline mock generators were removed from `client.js`
+  (`USE_MOCK_PIPELINES` and the `mock…` functions no longer exist) — the
+  Pipelines page is live-only and degrades to zeros / empty lists while
+  cicd-service is down. Everything else calls the real backends.
+- Chart colors in Monitoring are approximate hex values of the design tokens
+  (recharts needs literal colors).
+- All colors / fonts are Tailwind v4 `@theme` tokens in `src/index.css`
+  (`forge-*` surfaces, `ember-*` primary, `steel-*` secondary,
+  `signal-success/warning/danger`; Space Grotesk / Inter / JetBrains Mono).

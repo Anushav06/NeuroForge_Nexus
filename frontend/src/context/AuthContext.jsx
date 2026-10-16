@@ -3,8 +3,8 @@ import { loginRequest, registerRequest } from '../api/client'
 
 /* eslint-disable react/only-export-components -- useAuth is a hook intentionally co-located with AuthProvider */
 
-const TOKEN_KEY = 'nf_token'
-const USER_KEY = 'nf_user'
+const TOKEN_KEY = 'token'
+const USER_KEY = 'user'
 
 /**
  * AuthContext — holds the signed-in user + token for the whole app.

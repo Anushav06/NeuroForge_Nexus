@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, CalendarRange, CheckSquare, Plus, Target, Zap } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, CalendarRange, CheckSquare, Pencil, Plus, Target, Trash2, Zap } from 'lucide-react'
 import {
   createTask,
+  deleteSprint,
+  deleteTask,
   fetchProjects,
   fetchSprints,
   fetchSubtasks,
@@ -11,6 +13,7 @@ import {
   isSprintActive,
   TASK_PRIORITIES,
   TASK_STATUSES,
+  updateSprint,
   updateTaskStatus,
 } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -31,12 +34,29 @@ const formatDate = (iso) =>
     : '—'
 
 /** One task on the board including subtasks checklist */
-function TaskCard({ task, subtasks = [], canEdit, onStatusChange }) {
+function TaskCard({ task, assignee, subtasks = [], canEdit, canManage, onStatusChange, onDelete }) {
   const completedSubs = subtasks.filter((st) => st.status === 'DONE');
+  const taskId = task.id || task._id
 
   return (
     <article className="rounded-lg border border-forge-700/70 bg-forge-850 p-3 transition hover:border-forge-600">
-      <p className="text-sm font-medium leading-snug text-forge-text">{task.title}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium leading-snug text-forge-text">{task.title}</p>
+        {/* Delete is intentionally restricted to managers/leads, not the
+            assignee — assignees can move a task's status but shouldn't be
+            able to remove it outright. */}
+        {canManage ? (
+          <button
+            type="button"
+            onClick={() => onDelete(taskId, task.title)}
+            aria-label="Delete task"
+            title="Delete task"
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-forge-faint transition hover:bg-signal-danger/10 hover:text-signal-danger"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ) : null}
+      </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <PriorityBadge priority={task.priority} />
@@ -54,10 +74,13 @@ function TaskCard({ task, subtasks = [], canEdit, onStatusChange }) {
       ) : null}
 
       <div className="mt-3 flex items-center gap-2">
-        {task.assignee ? (
+        {/* Real backend field is task.assignedTo (a bare user-ID string, no
+            nested object) — resolve the display name from the users list,
+            the same lookup pattern Projects.jsx/Teams.jsx already use. */}
+        {assignee ? (
           <>
-            <Avatar name={task.assignee.name} className="h-6 w-6 text-[10px]" />
-            <span className="truncate text-xs text-forge-muted">{task.assignee.name}</span>
+            <Avatar name={assignee.name} className="h-6 w-6 text-[10px]" />
+            <span className="truncate text-xs text-forge-muted">{assignee.name}</span>
           </>
         ) : (
           <span className="text-xs text-forge-faint">Unassigned</span>
@@ -69,7 +92,7 @@ function TaskCard({ task, subtasks = [], canEdit, onStatusChange }) {
           <span className="sr-only">Status for {task.title}</span>
           <select
             value={task.status}
-            onChange={(event) => onStatusChange(task.id || task._id, event.target.value)}
+            onChange={(event) => onStatusChange(taskId, event.target.value)}
             className="nf-input px-2 py-1 text-xs"
           >
             {TASK_STATUSES.map((status) => (
@@ -113,7 +136,8 @@ function NewTaskForm({ projectId, sprintId, users, defaultStatus, onClose, onCre
         status: defaultStatus,
       }
 
-      // Map assigneeId to assignedTo as required by the backend model
+      // Real backend field is assignedTo (Task.java) — map the form's
+      // assigneeId select value onto it before posting.
       if (form.assigneeId && form.assigneeId !== '') {
         payload.assignedTo = form.assigneeId
       }
@@ -242,8 +266,141 @@ function NewTaskForm({ projectId, sprintId, users, defaultStatus, onClose, onCre
   )
 }
 
+/** Modal for editing a sprint's name, goal and date range */
+function EditSprintForm({ sprint, projectId, onClose, onUpdated }) {
+  const [form, setForm] = useState({
+    name: sprint.name || '',
+    goal: sprint.goal || '',
+    startDate: sprint.startDate || '',
+    endDate: sprint.endDate || '',
+  })
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  const set = (key) => (event) => setForm((f) => ({ ...f, [key]: event.target.value }))
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      const updated = await updateSprint(projectId, sprint.id || sprint._id, form)
+      onUpdated(updated)
+    } catch (err) {
+      setError(err.message ?? 'Could not update the sprint.')
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-forge-950/80 p-4 backdrop-blur-sm sm:p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose()
+      }}
+    >
+      <div className="mx-auto w-full max-w-lg rounded-2xl border border-forge-700 bg-forge-900 shadow-2xl shadow-black/50">
+        <div className="flex items-center justify-between border-b border-forge-700/70 px-6 py-4">
+          <h2 className="font-display text-lg font-semibold text-forge-text">Edit sprint</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 place-items-center rounded-lg text-forge-muted transition hover:bg-forge-800 hover:text-forge-text"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+          {error ? (
+            <p
+              role="alert"
+              className="rounded-lg border border-signal-danger/30 bg-signal-danger/10 px-3 py-2.5 text-sm text-signal-danger"
+            >
+              {error}
+            </p>
+          ) : null}
+
+          <div>
+            <label htmlFor="sprint-name" className="nf-label">
+              Name
+            </label>
+            <input
+              id="sprint-name"
+              type="text"
+              required
+              value={form.name}
+              onChange={set('name')}
+              className="nf-input"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="sprint-goal" className="nf-label">
+              Goal
+            </label>
+            <textarea
+              id="sprint-goal"
+              rows={2}
+              value={form.goal}
+              onChange={set('goal')}
+              className="nf-input resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="sprint-start" className="nf-label">
+                Start date
+              </label>
+              <input
+                id="sprint-start"
+                type="date"
+                value={form.startDate}
+                onChange={set('startDate')}
+                className="nf-input"
+              />
+            </div>
+            <div>
+              <label htmlFor="sprint-end" className="nf-label">
+                End date
+              </label>
+              <input
+                id="sprint-end"
+                type="date"
+                value={form.endDate}
+                onChange={set('endDate')}
+                className="nf-input"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-forge-700/70 pt-4">
+            <button type="button" onClick={onClose} className="nf-btn-ghost" disabled={submitting}>
+              Cancel
+            </button>
+            <button type="submit" className="nf-btn-primary" disabled={submitting}>
+              {submitting ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function SprintBoard() {
   const params = useParams()
+  const navigate = useNavigate()
   const sprintId = params.sprintId
   const paramProjectId = params.projectId
 
@@ -265,8 +422,15 @@ export default function SprintBoard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [actionError, setActionError] = useState('')
+  const [sprintActionError, setSprintActionError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [formStatus, setFormStatus] = useState('TODO')
+  const [showEditSprintForm, setShowEditSprintForm] = useState(false)
+
+  // Id → user lookup: task cards resolve the assignee's name from
+  // task.assignedTo (a bare user-ID string) through this map — the backend
+  // never returns a nested assignee object.
+  const usersById = useMemo(() => new Map((users || []).map((u) => [u.id || u._id, u])), [users])
 
   useEffect(() => {
     let cancelled = false
@@ -344,7 +508,41 @@ export default function SprintBoard() {
     }
   }
 
-  const canEditTask = (task) => canManage || task.assigneeId === currentUser.id
+  async function handleDeleteTask(taskId, taskTitle) {
+    if (!window.confirm(`Delete task "${taskTitle}"? This cannot be undone.`)) return
+    setActionError('')
+    try {
+      await deleteTask(projectId, taskId)
+      setTasks((current) => current.filter((t) => (t.id || t._id) !== taskId))
+      setSubtasksMap((current) => {
+        const next = { ...current }
+        delete next[taskId]
+        return next
+      })
+    } catch (err) {
+      setActionError(err.message ?? 'Could not delete the task.')
+    }
+  }
+
+  async function handleDeleteSprint() {
+    if (tasks.length > 0) {
+      setSprintActionError(`Can't delete this sprint — it has ${tasks.length} task(s). Move or delete them first.`)
+      return
+    }
+    if (!window.confirm(`Delete sprint "${sprint.name}"? This cannot be undone.`)) return
+    setSprintActionError('')
+    try {
+      await deleteSprint(projectId, sprint.id || sprint._id)
+      navigate('/sprints')
+    } catch (err) {
+      setSprintActionError(err.message ?? 'Could not delete the sprint.')
+    }
+  }
+
+  // Real backend field is task.assignedTo (a bare user-ID string) — the
+  // previous check read task.assigneeId, which never existed, so
+  // non-managers could never edit their own tasks. Fixed to match reality.
+  const canEditTask = (task) => canManage || task.assignedTo === currentUser.id
 
   const totalPoints = tasks.reduce((sum, t) => sum + (t.storyPoints || 0), 0)
   const donePoints = tasks
@@ -407,6 +605,25 @@ export default function SprintBoard() {
           ) : null}
         </div>
 
+        {canManage ? (
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEditSprintForm(true)}
+              className="nf-btn-ghost px-3 py-1.5 text-xs"
+            >
+              <Pencil className="h-3.5 w-3.5" aria-hidden /> Edit sprint
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteSprint}
+              className="nf-btn-ghost px-3 py-1.5 text-xs text-signal-danger hover:bg-signal-danger/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden /> Delete sprint
+            </button>
+          </div>
+        ) : null}
+
         <p className="mt-2 flex items-start gap-2 text-sm text-forge-muted">
           <Target className="mt-0.5 h-4 w-4 shrink-0 text-ember-400" aria-hidden />
           <span>
@@ -456,6 +673,15 @@ export default function SprintBoard() {
           </div>
         </div>
       </div>
+
+      {sprintActionError ? (
+        <p
+          role="alert"
+          className="mb-4 rounded-lg border border-signal-danger/30 bg-signal-danger/10 px-3 py-2.5 text-sm text-signal-danger"
+        >
+          {sprintActionError}
+        </p>
+      ) : null}
 
       {actionError ? (
         <p
@@ -508,9 +734,12 @@ export default function SprintBoard() {
                       <TaskCard
                         key={tId}
                         task={task}
+                        assignee={usersById.get(task.assignedTo)}
                         subtasks={subtasksMap[tId] || []}
                         canEdit={canEditTask(task)}
+                        canManage={canManage}
                         onStatusChange={handleStatusChange}
+                        onDelete={handleDeleteTask}
                       />
                     )
                   })
@@ -533,6 +762,18 @@ export default function SprintBoard() {
             setTasks((current) => [...current, created])
             setSubtasksMap((current) => ({ ...current, [cId]: [] }))
             setShowForm(false)
+          }}
+        />
+      ) : null}
+
+      {showEditSprintForm ? (
+        <EditSprintForm
+          sprint={sprint}
+          projectId={projectId}
+          onClose={() => setShowEditSprintForm(false)}
+          onUpdated={(updated) => {
+            setSprint((current) => ({ ...current, ...updated }))
+            setShowEditSprintForm(false)
           }}
         />
       ) : null}
