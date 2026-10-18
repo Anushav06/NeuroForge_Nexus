@@ -4,32 +4,34 @@
 
 Dark "forge / foundry" themed SDLC & project-management frontend. Built with
 React 19 + Vite, React Router, Tailwind CSS v4 (`@tailwindcss/vite`), recharts
-and lucide-react. All API calls use plain `fetch` (no Axios) through one file:
+and lucide-react. All API calls use plain `fetch` (no Axios) through
 `src/api/client.js`.
 
 Two backend services are used:
 
-| Service      | Port | Covers                                                        |
-| ------------ | ---- | ------------------------------------------------------------- |
-| user-service | 8081 | auth, users, projects, teams, sprints, tasks, dashboard stats |
-| cicd-service | 8083 | pipelines, builds, deployments, releases, health metrics      |
+| Service      | Port | Covers                                                                |
+| ------------ | ---- | --------------------------------------------------------------------- |
+| user-service | 8081 | auth, users, projects, teams, sprints, tasks, dashboard stats         |
+| cicd-service | 8083 | pipelines, builds, deployments, releases, health metrics, bug reports |
 
-Last updated: 2026-10-10.
+Last updated: 2026-10-18.
 
 ---
 
 ## Status at a glance
 
-| Milestone                 | Pages                                                       | Data                         |
-| ------------------------- | ----------------------------------------------------------- | ---------------------------- |
-| M1 — Project & User Mgmt  | Login, Register, Dashboard, Projects, Teams, Team detail    | Live (user-service)          |
-| M2 — Sprint & Task Mgmt   | Sprints (List / Calendar / Timeline), Sprint board (Kanban) | Live (user-service)          |
-| M3 — CI/CD Pipeline       | Pipelines (builds, stage tracker, rollback)                 | Live (cicd-service)          |
-| M4 — Release & Monitoring | Releases, Deployments, Monitoring                           | Live (cicd-service)          |
-| Extras                    | Bug Reports, AI Assistant (floating), Repository (GitHub)   | **Placeholders — see below** |
+| Milestone                 | Pages                                                       | Data                                                      |
+| ------------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
+| M1 — Project & User Mgmt  | Login, Register, Dashboard, Projects, Teams, Team detail    | Live (user-service)                                       |
+| M2 — Sprint & Task Mgmt   | Sprints (List / Calendar / Timeline), Sprint board (Kanban) | Live (user-service)                                       |
+| M3 — CI/CD Pipeline       | Pipelines (builds, stage tracker, rollback)                 | Live (cicd-service)                                       |
+| M4 — Release & Monitoring | Releases, Deployments, Monitoring                           | Live (cicd-service)                                       |
+| Trainer request           | Bug Reports                                                 | Live (cicd-service); some fields browser-only — see below |
+| Extras                    | AI Assistant (floating), Repository (GitHub)                | **Placeholders — see below**                              |
 
 Full create / edit / delete is wired for Teams, Projects, Sprints, Tasks and
-Releases. Deployments support deploy and rollback.
+Releases. Deployments support deploy and rollback. Bugs support report,
+assign, and status changes — there is deliberately **no delete** for bugs.
 
 ---
 
@@ -91,14 +93,12 @@ to see the contributor experience.
 
 ## Role-based access (frontend)
 
-Two tiers, applied on every page. This mirrors what the backend's
-`@PreAuthorize` checks actually accept, so the UI never offers an action the
-API would reject.
+Two tiers, applied on every page.
 
-| Tier             | Roles                                | Can do                                                                                                                                                          |
-| ---------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Managers**     | ADMIN, PROJECT_LEAD, PROJECT_MANAGER | Create / edit / delete teams, projects, sprints, tasks. Publish releases. Deploy and roll back. Roll back builds. ADMIN also sees the all-users table on Teams. |
-| **Contributors** | DEVELOPER, DESIGNER, QA, EMPLOYEE    | View everything. Change the status of tasks **assigned to them** (`task.assignedTo === user.id`). Nothing else.                                                 |
+| Tier             | Roles                                | Can do                                                                                                                                                                       |
+| ---------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Managers**     | ADMIN, PROJECT_LEAD, PROJECT_MANAGER | Create / edit / delete teams, projects, sprints, tasks. Publish releases. Deploy and roll back. Roll back builds. Assign bugs. ADMIN also sees the all-users table on Teams. |
+| **Contributors** | DEVELOPER, DESIGNER, QA, EMPLOYEE    | View everything. Change the status of tasks **assigned to them** (`task.assignedTo === user.id`). Report bugs. Nothing else.                                                 |
 
 Dashboard by tier:
 
@@ -107,6 +107,14 @@ Dashboard by tier:
   across every project, grouped To Do / In Progress / Done). There is no
   "tasks assigned to me" endpoint, so this fetches each project's tasks and
   filters client-side.
+
+Bug Reports rules (from the trainer):
+
+- **Anyone** can report a bug. The reporter cannot choose who fixes it.
+- Only a **manager** (ADMIN, PROJECT_LEAD, PROJECT_MANAGER) assigns a bug.
+- A bug's status can be moved by a manager, by the assignee, or by **QA** for
+  the retest steps (FIXED → RETEST → CLOSED / REOPENED).
+- **Nobody can delete a bug** — closed bugs stay as project history.
 
 Gating is done with `useAuth().hasRole(...)` inside each page. The frontend
 only hides controls — real enforcement must be on the backend (see action
@@ -155,34 +163,48 @@ success-rate trend chart and test-coverage trend chart (recharts). There is
 no separate HealthMetric model on the backend; health is computed from
 Pipeline / Build / Deployment data, so this page is pipeline-health-centric.
 
+**Bug Reports (`/bugs`)** — per-project bug list on the cicd-service Bug API.
+
+- _Report a bug:_ title, description, module, environment, severity,
+  priority, **linked task / user story**, error message, console log, and
+  attachments. "Reported by" and the created date are automatic.
+- _Workflow:_ `NEW → CONFIRMED (triage) → IN_PROGRESS → FIXED → RETEST →
+CLOSED`, and a failed retest goes `RETEST → REOPENED → IN_PROGRESS`. A
+  CONFIRMED bug can't be started until a manager has assigned someone (the
+  backend enforces this too).
+- _Traceability:_ each bug can point at the task / user story it came from;
+  the bug row shows "From task: …".
+- _Filters:_ status and severity tags on each bug, the metric cards (Total,
+  Open, In Progress, Closed, Critical open) and the bars / slices of the
+  "by status" and "by severity" charts all filter the list. Click again or use
+  "Clear filter" to reset.
+- _No delete_ and _manager-only assignment_ (see Role-based access).
+
+The bug API helpers (`listBugs`, `createBug`, `patchBugStatus`,
+`patchBugAssign`) live inside `BugReports.jsx` and call `requestCicd()`; they
+are not in `client.js`.
+
 **Repository (GitHub)** — **mock only**, see next section.
 
 **AI Assistant** — floating chat panel. Creates projects from natural
 language and answers simple questions from already-fetched data.
 **Heuristic placeholder** (`askAssistant()` in `client.js`), not a real LLM.
 
-**Bug Reports** — **mock only** (local state), see next section.
-
-## Placeholders (not real integrations yet)
+## Placeholders and gaps (not real integrations yet)
 
 - **Repository page (`/repository`)** — Connect GitHub, commit feed, PR list
   and webhook status are all simulated from seeded sample data, and reset on
   refresh. A banner on the page says so. A real version needs a GitHub OAuth
   App, a webhook receiver endpoint, and repository storage on the backend.
   When those exist, replace the mock data in `Repository.jsx`; the UI stays.
-- **Bug Reports page (`/bugs`)** — report a bug against a project. Fields:
-  title, description, project, module, environment, severity, priority,
-  status, reported by (automatic), assigned to, created date (automatic).
-  Error message and console log are pasted text stored on the bug;
-  screenshots, recordings, logs and other files keep file names only
-  (name/size — no upload endpoint exists). Workflow: NEW → CONFIRMED
-  (triage) → assign → IN_PROGRESS → FIXED → RETEST → CLOSED / REOPENED
-  (REOPENED goes back to IN_PROGRESS). A CONFIRMED bug cannot be started
-  until someone is assigned (assignment is a manager-only control), and
-  only a manager (ADMIN, PROJECT_LEAD, PROJECT_MANAGER) or the assignee
-  can change a bug's status. All data is local React state and resets on
-  refresh. The intended backend API shape is documented in the header of
-  `BugReports.jsx`.
+- **Bug Reports — fields the backend doesn't store yet.** `Bug.java` and
+  `CreateBugRequest` have no `linkedTaskId`, `errorMessage` or `consoleLog`,
+  and the create endpoint doesn't accept attachments. The form still sends
+  the first three and keeps all four in the browser, so they show until the
+  page is refreshed and are then lost. Attachments are listed by file name and
+  size only (no upload endpoint). A banner on the page says this. Once the
+  backend stores them, set `BACKEND_STORES_EXTRAS = true` at the top of
+  `BugReports.jsx` and the banner disappears.
 - **AI Assistant** — swap the body of `askAssistant()` for a call to the
   backend's LLM endpoint. The reply shape (`{ type, reply, prefill? }`) is
   already final.
@@ -193,7 +215,8 @@ language and answers simple questions from already-fetched data.
   entities, but neither backend service has any controller for them.
 - Backend endpoints that exist but have no UI yet: build trigger / cancel /
   retry / logs / test-results, pipeline create / update / delete / enable,
-  and manual deployment health update (`PATCH /deployments/{id}/health`).
+  manual deployment health update (`PATCH /deployments/{id}/health`), and
+  `GET /bugs/{id}` / `DELETE /bugs/{id}`.
 
 ---
 
@@ -202,7 +225,7 @@ language and answers simple questions from already-fetched data.
 ```
 frontend/src/
 ├── api/
-│   └── client.js          ← the ONLY file that talks to a backend
+│   └── client.js          ← shared API client (BugReports.jsx adds its own bug helpers)
 ├── context/
 │   └── AuthContext.jsx    ← user + token in sessionStorage, hasRole()
 ├── components/
@@ -293,25 +316,32 @@ also appears in data), `teamId`, `leadId`, `memberIds[]`, `sprint`, `dueDate`,
 
 Roles for reads = ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD, EMPLOYEE.
 Roles for writes = ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD.
+(Bug endpoints have their own role lists — see the table.)
 
-| Function                             | HTTP       | Path                                                             | Auth         |
-| ------------------------------------ | ---------- | ---------------------------------------------------------------- | ------------ |
-| `fetchPipelines` (composite)         | GET        | `/projects/{projectId}/pipelines`, `/pipelines/{id}/builds`      | read         |
-| `fetchProjectCicdStats`              | GET        | `/projects/{projectId}/cicd/stats`                               | none         |
-| `fetchReleases` / `createRelease`    | GET / POST | `/projects/{projectId}/releases`                                 | read / write |
-| `fetchReleaseById` / `updateRelease` | GET / PUT  | `/releases/{releaseId}`                                          | read / write |
-| `publishRelease`                     | POST       | `/releases/{releaseId}/publish?releasedBy=`                      | write        |
-| `fetchChangelog`                     | GET        | `/releases/{releaseId}/changelog`                                | read         |
-| `deployBuild`                        | POST       | `/builds/{buildId}/deploy` body `{ environment }`                | write        |
-| `fetchProjectDeployments`            | GET        | `/projects/{projectId}/deployments?environment=`                 | read         |
-| `fetchDeploymentById`                | GET        | `/deployments/{deploymentId}`                                    | read         |
-| `fetchCurrentDeployment`             | GET        | `/environments/{env}/current?projectId=`                         | read         |
-| `updateDeploymentHealth`             | PATCH      | `/deployments/{deploymentId}/health`                             | write        |
-| `rollbackDeployment`                 | POST       | `/deployments/{deploymentId}/rollback` body `{ rollbackReason }` | write        |
-| `fetchRollbacks`                     | GET        | `/projects/{projectId}/rollbacks`                                | read         |
-| `fetchPipelineHealth`                | GET        | `/pipelines/{pipelineId}/health`                                 | none         |
-| `fetchPipelineMetrics`               | GET        | `/pipelines/{pipelineId}/metrics?days=`                          | none         |
-| `fetchCoverageTrend`                 | GET        | `/pipelines/{pipelineId}/coverage-trend?last=`                   | read         |
+| Function                             | HTTP       | Path                                                             | Auth                                                                     |
+| ------------------------------------ | ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `fetchPipelines` (composite)         | GET        | `/projects/{projectId}/pipelines`, `/pipelines/{id}/builds`      | read                                                                     |
+| `fetchProjectCicdStats`              | GET        | `/projects/{projectId}/cicd/stats`                               | none                                                                     |
+| `fetchReleases` / `createRelease`    | GET / POST | `/projects/{projectId}/releases`                                 | read / write                                                             |
+| `fetchReleaseById` / `updateRelease` | GET / PUT  | `/releases/{releaseId}`                                          | read / write                                                             |
+| `publishRelease`                     | POST       | `/releases/{releaseId}/publish?releasedBy=`                      | write                                                                    |
+| `fetchChangelog`                     | GET        | `/releases/{releaseId}/changelog`                                | read                                                                     |
+| `deployBuild`                        | POST       | `/builds/{buildId}/deploy` body `{ environment }`                | write                                                                    |
+| `fetchProjectDeployments`            | GET        | `/projects/{projectId}/deployments?environment=`                 | read                                                                     |
+| `fetchDeploymentById`                | GET        | `/deployments/{deploymentId}`                                    | read                                                                     |
+| `fetchCurrentDeployment`             | GET        | `/environments/{env}/current?projectId=`                         | read                                                                     |
+| `updateDeploymentHealth`             | PATCH      | `/deployments/{deploymentId}/health`                             | write                                                                    |
+| `rollbackDeployment`                 | POST       | `/deployments/{deploymentId}/rollback` body `{ rollbackReason }` | write                                                                    |
+| `fetchRollbacks`                     | GET        | `/projects/{projectId}/rollbacks`                                | read                                                                     |
+| `fetchPipelineHealth`                | GET        | `/pipelines/{pipelineId}/health`                                 | none                                                                     |
+| `fetchPipelineMetrics`               | GET        | `/pipelines/{pipelineId}/metrics?days=`                          | none                                                                     |
+| `fetchCoverageTrend`                 | GET        | `/pipelines/{pipelineId}/coverage-trend?last=`                   | read                                                                     |
+| `listBugs`                           | GET        | `/projects/{projectId}/bugs`                                     | all roles                                                                |
+| `createBug`                          | POST       | `/projects/{projectId}/bugs`                                     | all roles                                                                |
+| `patchBugStatus`                     | PATCH      | `/bugs/{bugId}/status` body `{ status }`                         | ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD, DEVELOPER, QA, EMPLOYEE |
+| `patchBugAssign`                     | PATCH      | `/bugs/{bugId}/assign` body `{ assignedTo }`                     | ADMIN, PROJECT_LEAD, PROJECT_MANAGER, TEAM_LEAD, EMPLOYEE                |
+| — (not used by the UI)               | GET        | `/bugs/{bugId}`                                                  | all roles                                                                |
+| — (not used by the UI)               | DELETE     | `/bugs/{bugId}`                                                  | ADMIN, PROJECT_LEAD, PROJECT_MANAGER                                     |
 
 Enums: `Release.status` = `DRAFT | RELEASED | ROLLED_BACK`;
 `Deployment.environment` = `DEV | STAGING | PROD`;
@@ -320,8 +350,20 @@ Build status = `QUEUED | RUNNING | SUCCESS | FAILED | CANCELLED`.
 
 Build stages come back as `[{ name, status }]`; the UI maps `SUCCESS → PASSED`,
 `FAILED → FAILED`, everything else → `PENDING`. `Pipeline.HealthStatus` values
-are **unverified** — the UI colors `HEALTHY / DEGRADED / WARNING / CRITICAL`
-and shows any other value as a neutral pill.
+are `HEALTHY / DEGRADED / FAILING` (verified against `HealthMetricsService`);
+the UI colors `FAILING` as a critical alert and counts it in the "Critical" stat.
+
+**Bug** (verified against `Bug.java`): `id`, `projectId`, `title`,
+`description`, `module`, `environment` (`DEVELOPMENT | STAGING | PRODUCTION`),
+`severity` (`CRITICAL | HIGH | MEDIUM | LOW`), `priority`
+(`URGENT | HIGH | MEDIUM | LOW`), `status`
+(`NEW | CONFIRMED | IN_PROGRESS | FIXED | RETEST | CLOSED | REOPENED`),
+`reportedBy` (user ID), `reportedByName`, `assignedTo` (user ID), `createdAt`,
+`updatedAt`, `attachments[{ name, size }]`. The backend refuses to move a bug
+to `IN_PROGRESS` until it is assigned. `reportedByName` is only filled when
+the JWT filter keeps the token in the credentials, so the frontend resolves
+the reporter's name from `/users` using `reportedBy` and falls back to
+`reportedByName`.
 
 ---
 
@@ -338,61 +380,66 @@ Confirmed from the controller and model source, not speculation.
    checks. Either add TEAM_LEAD as a real role or remove it from the checks.
 3. **`HealthMetricsController`**: `getPipelineHealth`, `getProjectStats` and
    `getPipelineMetrics` have no `@PreAuthorize`; only `getCoverageTrend` does.
-4. **`SecurityConfig` uses `anyRequest().permitAll()`** in user-service, and
-   several controllers use `@CrossOrigin(origins = "*")`.
-5. **Kafka producer blocks the request when Kafka is down.** Creating or
+4. **Kafka producer blocks the request when Kafka is down.** Creating or
    updating a task hangs and the producer retries forever. Catch the send
    error or set short `max.block.ms` / `delivery.timeout.ms`.
-6. **`GET /dashboard/stats`** returns the org-wide total as `myProjects` for
+5. **`GET /dashboard/stats`** returns the org-wide total as `myProjects` for
    every caller. The frontend no longer depends on it, but it is still wrong.
-7. **`GET /projects` has no role filtering** — every caller receives every
+6. **`GET /projects` has no role filtering** — every caller receives every
    project. Team / lead / members are also not hydrated (IDs only).
-8. **Task API has no assignee name.** A response DTO with the assignee's name
+7. **Task API has no assignee name.** A response DTO with the assignee's name
    would replace the client-side lookup.
-9. **Test results never reach the UI.** `Pipelines.jsx` has a
-   `TestResultSummary` that reads `build.testResult`, but `mapBuildForUi()` in
-   `client.js` does not copy `testResult` through. One-line frontend fix:
-   add `testResult: build?.testResult ?? null` to `mapBuildForUi`. The
-   backend already exposes `GET /builds/{buildId}/test-results`.
-10. **Changelog 500?** If `GET /releases/{id}/changelog` returns a 500, check
+8. **Changelog 500?** If `GET /releases/{id}/changelog` returns a 500, check
     `ReleaseService` — the `ChangelogResponse` DTO itself is a plain
     getter/constructor class.
-11. **Real GitHub integration** (OAuth App + webhook receiver + repo storage)
+9. **Real GitHub integration** (OAuth App + webhook receiver + repo storage)
     to replace the Repository page mock.
+10. **Bug fields.** Add `linkedTaskId`, `errorMessage` and `consoleLog`
+    (all `String`) to `Bug.java` and `CreateBugRequest`, set them in
+    `createBug`, and return them; also accept and store the `attachments`
+    list on create. Until then these only live in the browser.
+11. **Bugs must not be deletable.** The trainer wants closed bugs kept as
+    project history. Remove `DELETE /bugs/{bugId}` (the frontend no longer
+    calls it).
+12. **Only higher authority assigns bugs.** `PATCH /bugs/{id}/assign` should
+    allow only ADMIN, PROJECT_LEAD and PROJECT_MANAGER; today `EMPLOYEE` and
+    `TEAM_LEAD` can assign too. `POST /projects/{id}/bugs` should also ignore
+    `assignedTo` (the frontend no longer sends it).
+13. **`DESIGNER` is missing from `PATCH /bugs/{id}/status`.** A designer who
+    is assigned a bug gets a 403 when moving it.
 
 ---
 
 ## cicd-service changes (frontend developer)
 
 Commit `e54d1d8` on branch `fix/cicd-integration` (merged into `main`,
-2026-09-25) — *"Fix CI/CD backend security/logging, add test result display,
-Team/Project/Sprint edit-delete features, clean up gitignore"*. Its
+2026-09-25) — _"Fix CI/CD backend security/logging, add test result display,
+Team/Project/Sprint edit-delete features, clean up gitignore"_. Its
 `backend/cicd-service` scope, per file:
 
-| File | What changed | Why | Committed? |
-| ---- | ------------ | --- | ---------- |
-| `config/JwtAuthFilter.java` | JWT validation rebuilt around `extractClaims()`; every failure type (expired / bad signature / malformed / unsupported / invalid) logged as a WARN with the request URI; DEBUG log for requests without a token; WARN when a valid token carries no role claim | Security/logging fix — JWT rejections used to be silent; signature failures now hint at a `JWT_SECRET` mismatch between the two services | Yes |
-| `config/SecurityConfig.java` | CORS wired into the filter chain: new `CorsConfigurationSource` bean (local Vite origins 5173 / 5174 / 3000, `127.0.0.1:*`, standard methods and headers, credentials allowed, 1 h preflight cache) so OPTIONS preflights are answered instead of rejected as unauthenticated | Security fix — the frontend dev origins were being blocked | Yes |
-| `controller/BuildController.java` | `DEVOPS` → `TEAM_LEAD` in `@PreAuthorize` on all 9 endpoints (trigger, builds, single build, logs, cancel, retry, stage update, save + get test-results) | Align role lists with the roles the app actually has | Yes |
-| `controller/PipelineController.java` | Same rename on all 6 pipeline endpoints | Same | Yes |
-| `controller/DeploymentController.java` | `@PreAuthorize` added to all 7 endpoints (deploy / health / rollback = manager tier; list / get / current / rollback history also allow `EMPLOYEE`) | Security fix — these endpoints previously had no checks | Yes |
-| `controller/ReleaseController.java` | `@PreAuthorize` added to all 6 endpoints (create / update / publish = manager tier; reads also allow `EMPLOYEE`) | Same | Yes |
-| `controller/HealthMetricsController.java` | `DEVOPS` → `TEAM_LEAD` on `getCoverageTrend` | Same | Yes |
-| `config/SecurityConfig.java` (working tree) | Merge-conflict cleanup: removed the commented-out legacy config, a duplicated dead filter chain and a stray conflict hash line left behind by `5278d34`; `.cors(...)` moved back inside the single live chain | Repair the file the Sep 29 merge resolution broke | **No — uncommitted** |
+| File                                        | What changed                                                                                                                                                                                                                                                                  | Why                                                                                                                                      | Committed?           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `config/JwtAuthFilter.java`                 | JWT validation rebuilt around `extractClaims()`; every failure type (expired / bad signature / malformed / unsupported / invalid) logged as a WARN with the request URI; DEBUG log for requests without a token; WARN when a valid token carries no role claim                | Security/logging fix — JWT rejections used to be silent; signature failures now hint at a `JWT_SECRET` mismatch between the two services | Yes                  |
+| `config/SecurityConfig.java`                | CORS wired into the filter chain: new `CorsConfigurationSource` bean (local Vite origins 5173 / 5174 / 3000, `127.0.0.1:*`, standard methods and headers, credentials allowed, 1 h preflight cache) so OPTIONS preflights are answered instead of rejected as unauthenticated | Security fix — the frontend dev origins were being blocked                                                                               | Yes                  |
+| `controller/BuildController.java`           | `DEVOPS` → `TEAM_LEAD` in `@PreAuthorize` on all 9 endpoints (trigger, builds, single build, logs, cancel, retry, stage update, save + get test-results)                                                                                                                      | Align role lists with the roles the app actually has                                                                                     | Yes                  |
+| `controller/PipelineController.java`        | Same rename on all 6 pipeline endpoints                                                                                                                                                                                                                                       | Same                                                                                                                                     | Yes                  |
+| `controller/DeploymentController.java`      | `@PreAuthorize` added to all 7 endpoints (deploy / health / rollback = manager tier; list / get / current / rollback history also allow `EMPLOYEE`)                                                                                                                           | Security fix — these endpoints previously had no checks                                                                                  | Yes                  |
+| `controller/ReleaseController.java`         | `@PreAuthorize` added to all 6 endpoints (create / update / publish = manager tier; reads also allow `EMPLOYEE`)                                                                                                                                                              | Same                                                                                                                                     | Yes                  |
+| `controller/HealthMetricsController.java`   | `DEVOPS` → `TEAM_LEAD` on `getCoverageTrend`                                                                                                                                                                                                                                  | Same                                                                                                                                     | Yes                  |
+| `config/SecurityConfig.java` (working tree) | Merge-conflict cleanup: removed the commented-out legacy config, a duplicated dead filter chain and a stray conflict hash line left behind by `5278d34`; `.cors(...)` moved back inside the single live chain                                                                 | Repair the file the Sep 29 merge resolution broke                                                                                        | **No — uncommitted** |
 
 Also uncommitted in the same area: `frontend/src/api/client.js` no longer
-contains `USE_MOCK_PIPELINES` or the `mock…` pipeline generators (see Notes),
-and the `TestResultSummary` on the Pipelines page is still inert because
-`mapBuildForUi()` doesn't pass `testResult` through (action item 9).
+contains `USE_MOCK_PIPELINES` or the `mock…` pipeline generators (see Notes).
 
 ## Notes
 
 - The pipeline mock generators were removed from `client.js`
   (`USE_MOCK_PIPELINES` and the `mock…` functions no longer exist) — the
   Pipelines page is live-only and degrades to zeros / empty lists while
-  cicd-service is down. Everything else calls the real backends.
-- Chart colors in Monitoring are approximate hex values of the design tokens
-  (recharts needs literal colors).
+  cicd-service is down. Everything except the Repository page and the AI
+  Assistant calls the real backends.
+- Chart colors in Monitoring and Bug Reports are approximate hex values of
+  the design tokens (recharts needs literal colors).
 - All colors / fonts are Tailwind v4 `@theme` tokens in `src/index.css`
   (`forge-*` surfaces, `ember-*` primary, `steel-*` secondary,
   `signal-success/warning/danger`; Space Grotesk / Inter / JetBrains Mono).

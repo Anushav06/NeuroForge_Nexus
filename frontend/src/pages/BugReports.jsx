@@ -5,54 +5,60 @@ import {
   CheckCircle2,
   ChevronDown,
   FolderKanban,
+  Link2,
   Paperclip,
   Plus,
   RotateCcw,
-  Trash2,
   X,
 } from 'lucide-react'
-import { fetchProjects, fetchUsers } from '../api/client'
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { extractId, fetchProjects, fetchTasksByProject, fetchUsers, requestCicd } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { EmptyState, PageHeader, StatCard } from '../components/ui'
+import { EmptyState, PageHeader } from '../components/ui'
 
 /**
- * Bug Reporting — NO BACKEND YET.
+ * Bug Reports — backed by the cicd-service Bug API:
  *
- * There is no Bug/BugReport controller, model or DTO anywhere in either
- * service (confirmed by the same full controller inventory that ruled out
- * Requirements/Testing pages). This feature was requested directly by the
- * trainer, after the original spec and backend build.
+ *   GET   /projects/{projectId}/bugs
+ *   POST  /projects/{projectId}/bugs
+ *   PATCH /bugs/{bugId}/status      body { status }
+ *   PATCH /bugs/{bugId}/assign      body { assignedTo }
  *
- * Everything below runs on local React state and resets on refresh — same
- * placeholder pattern as the AI Assistant and Repository pages. When a real
- * backend exists, the intended shape is:
+ * Trainer's rules implemented here:
+ *  - No delete anywhere: bugs stay as project history, even when CLOSED.
+ *  - Only a manager (ADMIN / PROJECT_LEAD / PROJECT_MANAGER) assigns who fixes
+ *    a bug. The reporter cannot pick an assignee, and work cannot start on a
+ *    CONFIRMED bug until someone is assigned.
+ *  - Every bug can be linked to the task / user story it came from.
+ *  - Status and severity tags, the metric cards and the chart bars are all
+ *    clickable filters.
  *
- *   GET    /projects/{projectId}/bugs
- *   POST   /projects/{projectId}/bugs        body: CreateBugRequest (see form)
- *   PATCH  /bugs/{bugId}/status              body: { status }
- *   PATCH  /bugs/{bugId}/assign              body: { assignedTo }
- *   DELETE /bugs/{bugId}
- *   POST   /bugs/{bugId}/attachments         multipart file upload (NOT built —
- *                                             attachments here only keep the
- *                                             file's name/size, never its bytes)
- *
- * Status field values come from the trainer's exact list: NEW, CONFIRMED,
- * IN_PROGRESS, FIXED, RETEST, CLOSED, REOPENED. The workflow diagram's
- * "Triaged" step is the NEW → CONFIRMED transition; "Assigned" is a step
- * enforced in the UI: a CONFIRMED bug cannot be started until someone is
- * assigned (assignedTo is a field, not a stored status); the diagram's
- * Retest "Failed"/"Passed" branches are the two actions available on a
- * RETEST bug (→ REOPENED or → CLOSED).
- *
- * Error message and console log are pasted text stored on the bug itself.
- * Screenshots, recordings, logs and other files are listed by name only.
+ * The backend Bug model does NOT store linkedTaskId, errorMessage, consoleLog
+ * or attachments yet (see the Bug.java / CreateBugRequest the backend team
+ * shared). The form still sends them; once the backend stores them they come
+ * back on every load. Until then they only live in the browser until refresh.
+ * Flip BACKEND_STORES_EXTRAS to true when the backend team has added them, and
+ * the warning banner disappears.
  */
+const BACKEND_STORES_EXTRAS = false
 
 const ENVIRONMENTS = ['DEVELOPMENT', 'STAGING', 'PRODUCTION']
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const PRIORITIES = ['URGENT', 'HIGH', 'MEDIUM', 'LOW']
+const STATUSES = ['NEW', 'CONFIRMED', 'IN_PROGRESS', 'FIXED', 'RETEST', 'REOPENED', 'CLOSED']
 
-// Allowed forward transitions per status. RETEST branches two ways.
+// Forward transitions per status. RETEST branches two ways.
 const TRANSITIONS = {
   NEW: [{ to: 'CONFIRMED', label: 'Confirm (Triage)' }],
   CONFIRMED: [{ to: 'IN_PROGRESS', label: 'Start work' }],
@@ -85,21 +91,58 @@ const SEVERITY_STYLES = {
   LOW: 'border-forge-600 bg-forge-800 text-forge-muted',
 }
 
-function Pill({ styles, value }) {
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wider ${
-        styles[value] ?? 'border-forge-600 bg-forge-800 text-forge-muted'
-      }`}
-    >
-      {value}
-    </span>
-  )
+// recharts needs literal colors (approximate hex of the design tokens).
+const STATUS_CHART_COLORS = {
+  NEW: '#8b94a7',
+  CONFIRMED: '#6f8cd3',
+  IN_PROGRESS: '#f5b841',
+  FIXED: '#7ad6a8',
+  RETEST: '#ff8a4c',
+  REOPENED: '#f0546a',
+  CLOSED: '#3ddc97',
 }
+const SEVERITY_CHART_COLORS = {
+  CRITICAL: '#f0546a',
+  HIGH: '#ff8a4c',
+  MEDIUM: '#f5b841',
+  LOW: '#8b94a7',
+}
+
+const TOOLTIP_STYLE = {
+  contentStyle: {
+    backgroundColor: '#12151b',
+    border: '1px solid #232a36',
+    borderRadius: '8px',
+    color: '#e8ebf1',
+  },
+  itemStyle: { color: '#e8ebf1', fontSize: 12 },
+}
+
+/* ── Bug API (cicd-service) ──────────────────────────────────── */
+
+const listBugs = (projectId) => requestCicd(`/projects/${extractId(projectId)}/bugs`)
+
+const createBug = (projectId, body) =>
+  requestCicd(`/projects/${extractId(projectId)}/bugs`, { method: 'POST', body })
+
+const patchBugStatus = (bugId, status) =>
+  requestCicd(`/bugs/${extractId(bugId)}/status`, { method: 'PATCH', body: { status } })
+
+const patchBugAssign = (bugId, assignedTo) =>
+  requestCicd(`/bugs/${extractId(bugId)}/assign`, { method: 'PATCH', body: { assignedTo } })
+
+// Keep browser-only extras (linked task, error text, attachments) when the
+// server response doesn't carry them back.
+const mergeBug = (current, updated) => ({
+  ...current,
+  ...updated,
+  attachments: updated?.attachments?.length ? updated.attachments : current.attachments,
+})
 
 const relativeTime = (iso) => {
   if (!iso) return '—'
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (Number.isNaN(minutes)) return '—'
   if (minutes < 1) return 'just now'
   if (minutes < 60) return `${minutes}m ago`
   const hours = Math.round(minutes / 60)
@@ -107,9 +150,146 @@ const relativeTime = (iso) => {
   return `${Math.round(hours / 24)}d ago`
 }
 
+/* ── Clickable tag (status / severity) ───────────────────────── */
+
+function FilterPill({ styles, value, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Filter by ${value}`}
+      className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold tracking-wider transition hover:brightness-125 ${
+        styles[value] ?? 'border-forge-600 bg-forge-800 text-forge-muted'
+      } ${active ? 'ring-2 ring-ember-500/70' : ''}`}
+    >
+      {value}
+    </button>
+  )
+}
+
+/* ── Summary: clickable metric cards + charts ────────────────── */
+
+function BugSummary({ bugs, filters, onCard, onStatus, onSeverity }) {
+  const open = bugs.filter((b) => b.status !== 'CLOSED').length
+  const inProgress = bugs.filter((b) => b.status === 'IN_PROGRESS').length
+  const closed = bugs.filter((b) => b.status === 'CLOSED').length
+  const criticalOpen = bugs.filter((b) => b.severity === 'CRITICAL' && b.status !== 'CLOSED').length
+
+  const cards = [
+    { label: 'Total', value: bugs.length, next: { status: null, severity: null } },
+    { label: 'Open', value: open, next: { status: 'OPEN', severity: null } },
+    { label: 'In Progress', value: inProgress, next: { status: 'IN_PROGRESS', severity: null } },
+    { label: 'Closed', value: closed, next: { status: 'CLOSED', severity: null } },
+    { label: 'Critical open', value: criticalOpen, next: { status: 'OPEN', severity: 'CRITICAL' } },
+  ]
+
+  const byStatus = STATUSES.map((status) => ({
+    status,
+    label: status.replace('_', ' '),
+    count: bugs.filter((b) => b.status === status).length,
+  }))
+  const bySeverity = SEVERITIES.map((severity) => ({
+    severity,
+    name: severity,
+    value: bugs.filter((b) => b.severity === severity).length,
+  })).filter((d) => d.value > 0)
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {cards.map((card) => {
+          const active = filters.status === card.next.status && filters.severity === card.next.severity
+          return (
+            <button
+              key={card.label}
+              type="button"
+              onClick={() => onCard(card.next)}
+              className={`nf-card p-4 text-left transition hover:border-forge-600 ${
+                active ? 'ring-2 ring-ember-500/70' : ''
+              }`}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-forge-muted">{card.label}</p>
+              <p className="mt-1 font-mono text-2xl font-semibold text-forge-text">{card.value}</p>
+            </button>
+          )
+        })}
+      </div>
+
+      {bugs.length === 0 ? (
+        <p className="mt-4 rounded-lg border border-dashed border-forge-700 px-4 py-6 text-center text-sm text-forge-faint">
+          Charts appear once a bug is reported.
+        </p>
+      ) : (
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <section className="nf-card p-4 lg:col-span-2">
+            <h3 className="mb-1 font-display text-sm font-semibold text-forge-text">Bugs by status</h3>
+            <p className="mb-2 text-xs text-forge-faint">Click a bar to filter the list.</p>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byStatus} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#8b94a7' }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#8b94a7' }} axisLine={false} tickLine={false} />
+                  <Tooltip {...TOOLTIP_STYLE} cursor={{ fill: 'rgba(255,255,255,0.04)' }} formatter={(v) => [v, 'Bugs']} />
+                  <Bar
+                    dataKey="count"
+                    radius={[4, 4, 0, 0]}
+                    cursor="pointer"
+                    onClick={(d) => onStatus(d?.payload?.status ?? d?.status)}
+                  >
+                    {byStatus.map((entry) => (
+                      <Cell
+                        key={entry.status}
+                        fill={STATUS_CHART_COLORS[entry.status]}
+                        fillOpacity={filters.status && filters.status !== entry.status ? 0.35 : 1}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          <section className="nf-card p-4">
+            <h3 className="mb-1 font-display text-sm font-semibold text-forge-text">Bugs by severity</h3>
+            <p className="mb-2 text-xs text-forge-faint">Click a slice to filter.</p>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={bySeverity}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius="50%"
+                    outerRadius="78%"
+                    paddingAngle={3}
+                    stroke="#0a0c10"
+                    strokeWidth={2}
+                    cursor="pointer"
+                    onClick={(d) => onSeverity(d?.payload?.severity ?? d?.severity ?? d?.name)}
+                  >
+                    {bySeverity.map((entry) => (
+                      <Cell
+                        key={entry.severity}
+                        fill={SEVERITY_CHART_COLORS[entry.severity]}
+                        fillOpacity={filters.severity && filters.severity !== entry.severity ? 0.35 : 1}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip {...TOOLTIP_STYLE} formatter={(v, name) => [`${v} bug${v === 1 ? '' : 's'}`, name]} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: '#8b94a7' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  )
+}
+
 /* ── Report Bug modal ────────────────────────────────────────── */
 
-function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
+function ReportBugModal({ project, tasks, onClose, onSubmit }) {
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -117,12 +297,16 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
     environment: 'DEVELOPMENT',
     severity: 'MEDIUM',
     priority: 'MEDIUM',
-    assignedTo: '',
+    linkedTaskId: '',
     errorMessage: '',
     consoleLog: '',
   })
   const [attachments, setAttachments] = useState([])
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
   const fileInputRef = useRef(null)
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
   function handleFiles(e) {
     const files = Array.from(e.target.files || [])
@@ -130,23 +314,23 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
     e.target.value = ''
   }
 
-  function removeAttachment(index) {
-    setAttachments((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     if (!form.title.trim()) return
-    onSubmit({
-      ...form,
-      projectId: project.id || project._id,
-      reportedBy: currentUser.id,
-      reportedByName: currentUser.name,
-      status: 'NEW',
-      createdAt: new Date().toISOString(),
-      attachments,
-    })
+    setSubmitting(true)
+    setError('')
+    try {
+      await onSubmit({ ...form, attachments })
+    } catch (err) {
+      setError(err.message ?? 'Could not report the bug.')
+      setSubmitting(false)
+    }
   }
+
+  const inputClass =
+    'mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 text-sm text-forge-text outline-none focus:border-ember-500'
+  const selectClass =
+    'mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-2 py-2 text-xs text-forge-text outline-none focus:border-ember-500'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -161,46 +345,46 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error ? (
+            <p role="alert" className="rounded-lg border border-signal-danger/30 bg-signal-danger/10 px-3 py-2.5 text-sm text-signal-danger">
+              {error}
+            </p>
+          ) : null}
+
           <label className="block text-xs font-medium text-forge-muted">
             Bug title
-            <input
-              required
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="Login fails with valid credentials on mobile"
-              className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 text-sm text-forge-text outline-none focus:border-ember-500"
-            />
+            <input required value={form.title} onChange={set('title')} placeholder="Login fails with valid credentials on mobile" className={inputClass} />
           </label>
 
           <label className="block text-xs font-medium text-forge-muted">
             Description
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              rows={3}
-              placeholder="Steps to reproduce, expected vs actual behavior..."
-              className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 text-sm text-forge-text outline-none focus:border-ember-500"
-            />
+            <textarea value={form.description} onChange={set('description')} rows={3} placeholder="Steps to reproduce, expected vs actual behavior..." className={inputClass} />
           </label>
 
           <label className="block text-xs font-medium text-forge-muted">
             Module / Feature
-            <input
-              value={form.module}
-              onChange={(e) => setForm((f) => ({ ...f, module: e.target.value }))}
-              placeholder="e.g. Login, Dashboard, Payments"
-              className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 text-sm text-forge-text outline-none focus:border-ember-500"
-            />
+            <input value={form.module} onChange={set('module')} placeholder="e.g. Login, Dashboard, Payments" className={inputClass} />
+          </label>
+
+          <label className="block text-xs font-medium text-forge-muted">
+            Linked task / user story (optional)
+            <select value={form.linkedTaskId} onChange={set('linkedTaskId')} className={inputClass}>
+              <option value="">— none —</option>
+              {(tasks || []).map((t) => (
+                <option key={t.id || t._id} value={t.id || t._id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] text-forge-faint">
+              Pick the task or user story this bug came from, so it can be traced back.
+            </span>
           </label>
 
           <div className="grid grid-cols-3 gap-3">
             <label className="block text-xs font-medium text-forge-muted">
               Environment
-              <select
-                value={form.environment}
-                onChange={(e) => setForm((f) => ({ ...f, environment: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-2 py-2 text-xs text-forge-text outline-none focus:border-ember-500"
-              >
+              <select value={form.environment} onChange={set('environment')} className={selectClass}>
                 {ENVIRONMENTS.map((v) => (
                   <option key={v} value={v}>{v}</option>
                 ))}
@@ -208,11 +392,7 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
             </label>
             <label className="block text-xs font-medium text-forge-muted">
               Severity
-              <select
-                value={form.severity}
-                onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-2 py-2 text-xs text-forge-text outline-none focus:border-ember-500"
-              >
+              <select value={form.severity} onChange={set('severity')} className={selectClass}>
                 {SEVERITIES.map((v) => (
                   <option key={v} value={v}>{v}</option>
                 ))}
@@ -220,11 +400,7 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
             </label>
             <label className="block text-xs font-medium text-forge-muted">
               Priority
-              <select
-                value={form.priority}
-                onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-2 py-2 text-xs text-forge-text outline-none focus:border-ember-500"
-              >
+              <select value={form.priority} onChange={set('priority')} className={selectClass}>
                 {PRIORITIES.map((v) => (
                   <option key={v} value={v}>{v}</option>
                 ))}
@@ -233,51 +409,24 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
           </div>
 
           <label className="block text-xs font-medium text-forge-muted">
-            Assign to (optional)
-            <select
-              value={form.assignedTo}
-              onChange={(e) => setForm((f) => ({ ...f, assignedTo: e.target.value }))}
-              className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 text-sm text-forge-text outline-none focus:border-ember-500"
-            >
-              <option value="">— unassigned —</option>
-              {(users || []).map((u) => (
-                <option key={u.id || u._id} value={u.id || u._id}>
-                  {u.name} — {u.role}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block text-xs font-medium text-forge-muted">
             Error message (optional)
-            <textarea
-              value={form.errorMessage}
-              onChange={(e) => setForm((f) => ({ ...f, errorMessage: e.target.value }))}
-              rows={2}
-              placeholder="Paste the error text the user saw"
-              className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 font-mono text-xs text-forge-text outline-none focus:border-ember-500"
-            />
+            <textarea value={form.errorMessage} onChange={set('errorMessage')} rows={2} placeholder="Paste the error text the user saw" className={`${inputClass} font-mono text-xs`} />
           </label>
 
           <label className="block text-xs font-medium text-forge-muted">
             Console log (optional)
-            <textarea
-              value={form.consoleLog}
-              onChange={(e) => setForm((f) => ({ ...f, consoleLog: e.target.value }))}
-              rows={3}
-              placeholder="Paste browser console or server log output"
-              className="mt-1 w-full rounded-lg border border-forge-700 bg-forge-850 px-3 py-2 font-mono text-xs text-forge-text outline-none focus:border-ember-500"
-            />
+            <textarea value={form.consoleLog} onChange={set('consoleLog')} rows={3} placeholder="Paste browser console or server log output" className={`${inputClass} font-mono text-xs`} />
           </label>
 
           <div>
             <p className="mb-1.5 text-xs font-medium text-forge-muted">
               Attachments — screenshots, recordings, logs, files
             </p>
-            <p className="mb-2 rounded-lg border border-signal-warning/25 bg-signal-warning/10 px-3 py-2 text-[11px] text-signal-warning">
-              Demo mode — files are listed here but not actually uploaded anywhere;
-              there's no storage endpoint on the backend yet.
-            </p>
+            {!BACKEND_STORES_EXTRAS ? (
+              <p className="mb-2 rounded-lg border border-signal-warning/25 bg-signal-warning/10 px-3 py-2 text-[11px] text-signal-warning">
+                Files are listed by name only — the server doesn't store attachments yet.
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -291,7 +440,11 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
                 {attachments.map((a, i) => (
                   <li key={`${a.name}-${i}`} className="flex items-center justify-between rounded-md bg-forge-850 px-2.5 py-1.5 text-xs text-forge-muted">
                     <span className="truncate">{a.name}</span>
-                    <button type="button" onClick={() => removeAttachment(i)} className="ml-2 shrink-0 text-forge-faint hover:text-signal-danger">
+                    <button
+                      type="button"
+                      onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="ml-2 shrink-0 text-forge-faint hover:text-signal-danger"
+                    >
                       <X className="h-3 w-3" />
                     </button>
                   </li>
@@ -300,12 +453,16 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
             ) : null}
           </div>
 
+          <p className="text-[11px] text-forge-faint">
+            You can't pick who fixes it — a lead or manager assigns the bug after it is confirmed.
+          </p>
+
           <div className="flex justify-end gap-2 border-t border-forge-700/60 pt-4">
-            <button type="button" onClick={onClose} className="rounded-lg border border-forge-700 px-3 py-2 text-sm text-forge-muted hover:bg-forge-850">
+            <button type="button" onClick={onClose} disabled={submitting} className="rounded-lg border border-forge-700 px-3 py-2 text-sm text-forge-muted hover:bg-forge-850">
               Cancel
             </button>
-            <button type="submit" className="inline-flex items-center gap-1.5 rounded-lg bg-ember-500 px-4 py-2 text-sm font-medium text-white hover:bg-ember-600">
-              <Bug className="h-3.5 w-3.5" aria-hidden /> Report bug
+            <button type="submit" disabled={submitting} className="inline-flex items-center gap-1.5 rounded-lg bg-ember-500 px-4 py-2 text-sm font-medium text-white hover:bg-ember-600 disabled:opacity-60">
+              <Bug className="h-3.5 w-3.5" aria-hidden /> {submitting ? 'Reporting…' : 'Report bug'}
             </button>
           </div>
         </form>
@@ -316,30 +473,42 @@ function ReportBugModal({ project, users, currentUser, onClose, onSubmit }) {
 
 /* ── Single bug row ──────────────────────────────────────────── */
 
-function BugRow({ bug, users, usersById, canTransition, canManage, onTransition, onAssign, onDelete }) {
+function BugRow({
+  bug,
+  users,
+  usersById,
+  tasksById,
+  filters,
+  isManager,
+  canMove,
+  busy,
+  onTransition,
+  onAssign,
+  onStatusFilter,
+  onSeverityFilter,
+}) {
   const assignee = usersById.get(bug.assignedTo)
+  const reporterName = usersById.get(bug.reportedBy)?.name || bug.reportedByName || bug.reportedBy || 'Unknown'
+  const linkedTask = bug.linkedTaskId ? tasksById.get(bug.linkedTaskId) : null
   const transitions = TRANSITIONS[bug.status] || []
 
   return (
     <li className="rounded-lg border border-forge-700/60 bg-forge-850/50 p-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Pill styles={STATUS_STYLES} value={bug.status} />
-        <Pill styles={SEVERITY_STYLES} value={bug.severity} />
+        <FilterPill
+          styles={STATUS_STYLES}
+          value={bug.status}
+          active={filters.status === bug.status}
+          onClick={() => onStatusFilter(bug.status)}
+        />
+        <FilterPill
+          styles={SEVERITY_STYLES}
+          value={bug.severity}
+          active={filters.severity === bug.severity}
+          onClick={() => onSeverityFilter(bug.severity)}
+        />
         <span className="font-mono text-[10px] text-forge-faint">{bug.environment}</span>
         <span className="text-sm font-medium text-forge-text">{bug.title}</span>
-
-        <div className="ml-auto flex items-center gap-2">
-          {canManage ? (
-            <button
-              type="button"
-              onClick={() => onDelete(bug)}
-              title="Delete bug"
-              className="grid h-7 w-7 place-items-center rounded-md text-forge-faint transition hover:bg-signal-danger/10 hover:text-signal-danger"
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          ) : null}
-        </div>
       </div>
 
       {bug.description ? <p className="mt-2 text-xs text-forge-muted">{bug.description}</p> : null}
@@ -358,7 +527,14 @@ function BugRow({ bug, users, usersById, canTransition, canManage, onTransition,
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] text-forge-faint">
         {bug.module ? <span>Module: {bug.module}</span> : null}
         <span>Priority: {bug.priority}</span>
-        <span>Reported by {bug.reportedByName} · {relativeTime(bug.createdAt)}</span>
+        {bug.linkedTaskId ? (
+          <span className="inline-flex items-center gap-1 text-steel-300">
+            <Link2 className="h-3 w-3" aria-hidden /> From task: {linkedTask?.title || bug.linkedTaskId}
+          </span>
+        ) : null}
+        <span>
+          Reported by {reporterName} · {relativeTime(bug.createdAt)}
+        </span>
         {bug.attachments?.length > 0 ? (
           <span className="inline-flex items-center gap-1">
             <Paperclip className="h-3 w-3" aria-hidden /> {bug.attachments.length} attachment
@@ -368,13 +544,16 @@ function BugRow({ bug, users, usersById, canTransition, canManage, onTransition,
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-forge-700/50 pt-3">
-        {canManage ? (
+        {isManager ? (
           <select
             value={bug.assignedTo || ''}
-            onChange={(e) => onAssign(bug, e.target.value)}
+            onChange={(e) => e.target.value && onAssign(bug, e.target.value)}
+            disabled={busy}
             className="rounded-md border border-forge-700 bg-forge-850 px-2 py-1 text-xs text-forge-text outline-none focus:border-ember-500"
           >
-            <option value="">Unassigned</option>
+            <option value="" disabled>
+              Assign to…
+            </option>
             {(users || []).map((u) => (
               <option key={u.id || u._id} value={u.id || u._id}>
                 {u.name}
@@ -383,11 +562,11 @@ function BugRow({ bug, users, usersById, canTransition, canManage, onTransition,
           </select>
         ) : (
           <span className="text-xs text-forge-faint">
-            {assignee ? `Assigned to ${assignee.name}` : 'Unassigned'}
+            {assignee ? `Assigned to ${assignee.name}` : 'Not assigned yet'}
           </span>
         )}
 
-        {canTransition
+        {canMove
           ? transitions.map((t) => {
               // "Assigned" step: a confirmed bug needs an assignee before work starts.
               const needsAssignee = bug.status === 'CONFIRMED' && !bug.assignedTo
@@ -395,8 +574,8 @@ function BugRow({ bug, users, usersById, canTransition, canManage, onTransition,
                 <button
                   key={t.to}
                   type="button"
-                  disabled={needsAssignee}
-                  title={needsAssignee ? 'Assign someone before starting work' : undefined}
+                  disabled={needsAssignee || busy}
+                  title={needsAssignee ? 'A lead or manager must assign this bug first' : undefined}
                   onClick={() => onTransition(bug, t.to)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-forge-600 px-2.5 py-1.5 text-xs font-medium text-forge-muted transition hover:bg-forge-850 hover:text-forge-text disabled:cursor-not-allowed disabled:opacity-40"
                 >
@@ -414,9 +593,18 @@ function BugRow({ bug, users, usersById, canTransition, canManage, onTransition,
 
 /* ── Expandable per-project section ─────────────────────────── */
 
-function ProjectSection({ project, bugs, users, usersById, currentUser, isManager, isExpanded, onToggle, onReport, onTransition, onAssign, onDelete }) {
+function ProjectSection({
+  project,
+  allBugs,
+  visibleBugs,
+  isExpanded,
+  onToggle,
+  onReport,
+  renderBug,
+}) {
   const pId = project.id || project._id
-  const open = bugs.filter((b) => b.status !== 'CLOSED').length
+  const open = allBugs.filter((b) => b.status !== 'CLOSED').length
+  const filtered = visibleBugs.length !== allBugs.length
 
   return (
     <section className="nf-card overflow-hidden">
@@ -431,13 +619,11 @@ function ProjectSection({ project, bugs, users, usersById, currentUser, isManage
           aria-hidden
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-display text-sm font-semibold text-forge-text">
-            {project.name}
-          </span>
+          <span className="block truncate font-display text-sm font-semibold text-forge-text">{project.name}</span>
           <span className="block truncate font-mono text-[11px] text-steel-400">{pId}</span>
         </span>
         <span className="hidden items-center gap-4 font-mono text-[11px] text-forge-muted sm:flex">
-          <span>{bugs.length} bugs</span>
+          <span>{filtered ? `${visibleBugs.length} of ${allBugs.length}` : allBugs.length} bugs</span>
           <span>{open} open</span>
         </span>
       </button>
@@ -454,24 +640,12 @@ function ProjectSection({ project, bugs, users, usersById, currentUser, isManage
             </button>
           </div>
 
-          {bugs.length === 0 ? (
+          {allBugs.length === 0 ? (
             <p className="py-4 text-center text-sm text-forge-muted">No bugs reported for this project yet.</p>
+          ) : visibleBugs.length === 0 ? (
+            <p className="py-4 text-center text-sm text-forge-muted">No bugs match the current filter.</p>
           ) : (
-            <ul className="space-y-3">
-              {bugs.map((bug) => (
-                <BugRow
-                  key={bug.id}
-                  bug={bug}
-                  users={users}
-                  usersById={usersById}
-                  canTransition={isManager || bug.assignedTo === currentUser.id}
-                  canManage={isManager}
-                  onTransition={onTransition}
-                  onAssign={onAssign}
-                  onDelete={onDelete}
-                />
-              ))}
-            </ul>
+            <ul className="space-y-3">{visibleBugs.map(renderBug)}</ul>
           )}
         </div>
       ) : null}
@@ -481,33 +655,66 @@ function ProjectSection({ project, bugs, users, usersById, currentUser, isManage
 
 /* ── Page ───────────────────────────────────────────────────── */
 
-const MANAGER_ROLES_CONST = MANAGER_ROLES
-
 export default function BugReports() {
   const { user, hasRole } = useAuth()
-  const isManager = hasRole ? hasRole(...MANAGER_ROLES_CONST) : MANAGER_ROLES_CONST.includes(user.role)
+  const isManager = hasRole ? hasRole(...MANAGER_ROLES) : MANAGER_ROLES.includes(user.role)
+  const isQA = user.role === 'QA'
 
   const [projects, setProjects] = useState(null)
   const [users, setUsers] = useState([])
-  const [bugs, setBugs] = useState([]) // flat list, local-only, resets on refresh
+  const [tasks, setTasks] = useState([])
+  const [bugs, setBugs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [loadWarning, setLoadWarning] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [busyId, setBusyId] = useState(null)
   const [expandedIds, setExpandedIds] = useState(() => new Set())
   const [reportTarget, setReportTarget] = useState(null)
+  const [filters, setFilters] = useState({ status: null, severity: null })
 
   const usersById = useMemo(() => new Map((users || []).map((u) => [u.id || u._id, u])), [users])
+  const tasksById = useMemo(() => new Map((tasks || []).map((t) => [t.id || t._id, t])), [tasks])
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([fetchProjects(), fetchUsers()])
-      .then(([p, u]) => {
+    async function load() {
+      try {
+        const [projectData, userData] = await Promise.all([fetchProjects(), fetchUsers()])
+        let failed = false
+        const entries = await Promise.all(
+          (projectData || []).map(async (p) => {
+            const pId = p.id || p._id
+            const [projectBugs, projectTasks] = await Promise.all([
+              listBugs(pId).catch(() => {
+                failed = true
+                return []
+              }),
+              fetchTasksByProject(pId).catch(() => []),
+            ])
+            return { bugs: projectBugs || [], tasks: projectTasks || [] }
+          }),
+        )
         if (cancelled) return
-        setProjects(p || [])
-        setUsers(u || [])
-        if ((p || []).length > 0) setExpandedIds(new Set([p[0].id || p[0]._id]))
-      })
-      .catch((err) => !cancelled && setError(err.message ?? 'Failed to load projects.'))
-      .finally(() => !cancelled && setLoading(false))
+        setProjects(projectData || [])
+        setUsers(userData || [])
+        setBugs(
+          entries
+            .flatMap((e) => e.bugs)
+            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
+        )
+        setTasks(entries.flatMap((e) => e.tasks))
+        setLoadWarning(failed)
+        if ((projectData || []).length > 0) {
+          setExpandedIds(new Set([projectData[0].id || projectData[0]._id]))
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message ?? 'Failed to load bug reports.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
     return () => {
       cancelled = true
     }
@@ -522,59 +729,148 @@ export default function BugReports() {
     })
   }
 
-  function handleReportSubmit(bugData) {
-    const bug = { ...bugData, id: `BUG-${Date.now()}-${Math.round(Math.random() * 999)}` }
+  // Filters: clicking the same value again clears it.
+  const toggleStatus = (value) =>
+    value && setFilters((f) => ({ ...f, status: f.status === value ? null : value }))
+  const toggleSeverity = (value) =>
+    value && setFilters((f) => ({ ...f, severity: f.severity === value ? null : value }))
+  const applyCard = (next) =>
+    setFilters((f) =>
+      f.status === next.status && f.severity === next.severity ? { status: null, severity: null } : next,
+    )
+  const clearFilters = () => setFilters({ status: null, severity: null })
+
+  function passesFilter(bug) {
+    if (filters.status === 'OPEN' && bug.status === 'CLOSED') return false
+    if (filters.status && filters.status !== 'OPEN' && bug.status !== filters.status) return false
+    if (filters.severity && bug.severity !== filters.severity) return false
+    return true
+  }
+
+  async function handleReportSubmit(project, data) {
+    const pId = project.id || project._id
+    const { attachments, linkedTaskId, errorMessage, consoleLog, ...core } = data
+    const body = {
+      ...core,
+      ...(linkedTaskId ? { linkedTaskId } : {}),
+      ...(errorMessage.trim() ? { errorMessage: errorMessage.trim() } : {}),
+      ...(consoleLog.trim() ? { consoleLog: consoleLog.trim() } : {}),
+    }
+    const created = await createBug(pId, body)
+    const bug = {
+      ...created,
+      projectId: created.projectId ?? pId,
+      reportedBy: created.reportedBy ?? user.id,
+      reportedByName: created.reportedByName ?? user.name,
+      linkedTaskId: created.linkedTaskId ?? (linkedTaskId || null),
+      errorMessage: created.errorMessage ?? (errorMessage.trim() || null),
+      consoleLog: created.consoleLog ?? (consoleLog.trim() || null),
+      attachments: created.attachments?.length ? created.attachments : attachments,
+    }
     setBugs((prev) => [bug, ...prev])
     setReportTarget(null)
   }
 
-  function handleTransition(bug, nextStatus) {
-    setBugs((prev) => prev.map((b) => (b.id === bug.id ? { ...b, status: nextStatus } : b)))
+  async function handleTransition(bug, nextStatus) {
+    setActionError('')
+    setBusyId(bug.id)
+    try {
+      const updated = await patchBugStatus(bug.id, nextStatus)
+      setBugs((prev) => prev.map((b) => (b.id === bug.id ? mergeBug(b, updated) : b)))
+    } catch (err) {
+      setActionError(err.message ?? 'Could not update the bug.')
+    } finally {
+      setBusyId(null)
+    }
   }
 
-  function handleAssign(bug, userId) {
-    setBugs((prev) => prev.map((b) => (b.id === bug.id ? { ...b, assignedTo: userId || null } : b)))
+  async function handleAssign(bug, userId) {
+    setActionError('')
+    setBusyId(bug.id)
+    try {
+      const updated = await patchBugAssign(bug.id, userId)
+      setBugs((prev) => prev.map((b) => (b.id === bug.id ? mergeBug(b, updated) : b)))
+    } catch (err) {
+      setActionError(err.message ?? 'Could not assign the bug.')
+    } finally {
+      setBusyId(null)
+    }
   }
 
-  function handleDelete(bug) {
-    if (!window.confirm(`Delete bug "${bug.title}"?`)) return
-    setBugs((prev) => prev.filter((b) => b.id !== bug.id))
-  }
+  // Who can move a bug along: managers, the assignee, and QA (who retest fixes).
+  const canMove = (bug) =>
+    isManager || bug.assignedTo === user.id || (isQA && ['FIXED', 'RETEST'].includes(bug.status))
 
-  const totals = useMemo(() => {
-    const open = bugs.filter((b) => b.status !== 'CLOSED').length
-    const critical = bugs.filter((b) => b.severity === 'CRITICAL' && b.status !== 'CLOSED').length
-    return { total: bugs.length, open, critical }
-  }, [bugs])
-
+  const hasFilter = Boolean(filters.status || filters.severity)
   const safeProjects = projects || []
 
   return (
     <div>
       <PageHeader title="Bug Reports" subtitle="Track, triage, and resolve bugs across every project." />
 
-      <p className="mb-6 rounded-lg border border-signal-warning/25 bg-signal-warning/10 px-4 py-3 text-sm text-signal-warning">
-        This page runs on local, in-browser data only — there's no Bug entity on the backend yet.
-        Bugs reported here reset on refresh. Attachments keep file names, not the actual files.
-      </p>
+      {!BACKEND_STORES_EXTRAS ? (
+        <p className="mb-6 rounded-lg border border-signal-warning/25 bg-signal-warning/10 px-4 py-3 text-sm text-signal-warning">
+          Bugs are saved on the server. The linked task, error message, console log and attachments
+          aren't stored by the backend yet, so they only show until you refresh the page.
+        </p>
+      ) : null}
+
+      {loadWarning ? (
+        <p role="alert" className="mb-6 rounded-lg border border-signal-danger/30 bg-signal-danger/10 px-4 py-3 text-sm text-signal-danger">
+          Couldn't load bugs for some projects — check that cicd-service is running.
+        </p>
+      ) : null}
+
+      {actionError ? (
+        <p role="alert" className="mb-6 rounded-lg border border-signal-danger/30 bg-signal-danger/10 px-4 py-3 text-sm text-signal-danger">
+          {actionError}
+        </p>
+      ) : null}
 
       {error ? (
-        <EmptyState icon={AlertTriangle} title="Couldn't load projects" message={error} />
+        <EmptyState icon={AlertTriangle} title="Couldn't load bug reports" message={error} />
       ) : loading ? (
         <div aria-hidden className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {[0, 1, 2].map((k) => <div key={k} className="nf-card h-24 animate-pulse" />)}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {[0, 1, 2, 3, 4].map((k) => (
+              <div key={k} className="nf-card h-20 animate-pulse" />
+            ))}
           </div>
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard icon={Bug} label="Total Bugs" value={totals.total} hint="reported this session" accent="ember" />
-            <StatCard icon={AlertTriangle} label="Open" value={totals.open} hint="not yet closed" accent="danger" />
-            <StatCard icon={AlertTriangle} label="Critical Open" value={totals.critical} hint="need attention" accent="danger" />
-          </div>
+          <BugSummary
+            bugs={bugs}
+            filters={filters}
+            onCard={applyCard}
+            onStatus={toggleStatus}
+            onSeverity={toggleSeverity}
+          />
 
-          <h2 className="mb-4 mt-8 font-display text-lg font-semibold text-forge-text">Bugs by project</h2>
+          <div className="mb-4 mt-8 flex flex-wrap items-center gap-3">
+            <h2 className="font-display text-lg font-semibold text-forge-text">Bugs by project</h2>
+            {hasFilter ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {filters.status ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-ember-500/40 bg-ember-500/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-ember-400">
+                    Status: {filters.status}
+                  </span>
+                ) : null}
+                {filters.severity ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-ember-500/40 bg-ember-500/10 px-2.5 py-1 font-mono text-[10px] font-semibold text-ember-400">
+                    Severity: {filters.severity}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-forge-muted transition hover:bg-forge-850 hover:text-forge-text"
+                >
+                  <X className="h-3 w-3" aria-hidden /> Clear filter
+                </button>
+              </div>
+            ) : null}
+          </div>
 
           {safeProjects.length === 0 ? (
             <EmptyState icon={FolderKanban} title="No projects yet" message="Create a project first to report bugs against it." />
@@ -582,21 +878,34 @@ export default function BugReports() {
             <div className="space-y-4">
               {safeProjects.map((project) => {
                 const pId = project.id || project._id
+                const allBugs = bugs.filter((b) => b.projectId === pId)
+                const visibleBugs = allBugs.filter(passesFilter)
                 return (
                   <ProjectSection
                     key={pId}
                     project={project}
-                    bugs={bugs.filter((b) => b.projectId === pId)}
-                    users={users}
-                    usersById={usersById}
-                    currentUser={user}
-                    isManager={isManager}
+                    allBugs={allBugs}
+                    visibleBugs={visibleBugs}
                     isExpanded={expandedIds.has(pId)}
                     onToggle={toggleProject}
                     onReport={setReportTarget}
-                    onTransition={handleTransition}
-                    onAssign={handleAssign}
-                    onDelete={handleDelete}
+                    renderBug={(bug) => (
+                      <BugRow
+                        key={bug.id}
+                        bug={bug}
+                        users={users}
+                        usersById={usersById}
+                        tasksById={tasksById}
+                        filters={filters}
+                        isManager={isManager}
+                        canMove={canMove(bug)}
+                        busy={busyId === bug.id}
+                        onTransition={handleTransition}
+                        onAssign={handleAssign}
+                        onStatusFilter={toggleStatus}
+                        onSeverityFilter={toggleSeverity}
+                      />
+                    )}
                   />
                 )
               })}
@@ -608,10 +917,9 @@ export default function BugReports() {
       {reportTarget ? (
         <ReportBugModal
           project={reportTarget}
-          users={users}
-          currentUser={user}
+          tasks={tasks.filter((t) => t.projectId === (reportTarget.id || reportTarget._id))}
           onClose={() => setReportTarget(null)}
-          onSubmit={handleReportSubmit}
+          onSubmit={(data) => handleReportSubmit(reportTarget, data)}
         />
       ) : null}
     </div>

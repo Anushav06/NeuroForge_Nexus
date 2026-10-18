@@ -20,10 +20,12 @@ import { EmptyState, PageHeader, StatCard } from '../components/ui'
  * Milestone 3 — CI/CD Pipelines.
  *
  * Builds, stats, and rollback are served from the real cicd-service backend
- * (see client.js). If cicd-service is down, the page shows zeros or empty lists.
+ * (see client.js). If cicd-service is down, each project's build list and the
+ * org-wide stats degrade to empty lists / zeros; if user-service is down, the
+ * page shows its error state.
  */
 
-const ROLLBACK_ROLES = ['ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER']
+const ROLLBACK_ROLES = ['ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD']
 
 const formatDuration = (totalSeconds) => {
   const s = Number(totalSeconds) || 0
@@ -312,7 +314,7 @@ export default function Pipelines() {
           safeProjects.map(async (p) => {
             const pId = p.id || p._id
             const [builds, stats] = await Promise.all([
-              fetchPipelines(pId),
+              fetchPipelines(pId).catch(() => []),
               fetchPipelineStats(pId),
             ])
             return [pId, { builds: builds || [], stats }]

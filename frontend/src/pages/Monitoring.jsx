@@ -6,9 +6,7 @@ import {
   FolderKanban,
   Gauge,
   HeartPulse,
-  Percent,
   ShieldCheck,
-  Timer,
   TrendingUp,
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
@@ -48,6 +46,7 @@ const HEALTH_STYLES = {
   DEGRADED: 'border-signal-warning/25 bg-signal-warning/10 text-signal-warning',
   WARNING: 'border-signal-warning/25 bg-signal-warning/10 text-signal-warning',
   CRITICAL: 'border-signal-danger/25 bg-signal-danger/10 text-signal-danger',
+  FAILING: 'border-signal-danger/25 bg-signal-danger/10 text-signal-danger',
   UNKNOWN: 'border-forge-600 bg-forge-800 text-forge-muted',
 }
 
@@ -363,7 +362,10 @@ export default function Monitoring() {
   const orgHealth = useMemo(() => {
     const all = Object.values(healthByPipeline).filter(Boolean)
     const healthy = all.filter((h) => String(h.healthStatus).toUpperCase() === 'HEALTHY').length
-    const critical = all.filter((h) => String(h.healthStatus).toUpperCase() === 'CRITICAL').length
+    // Backend emits HEALTHY / DEGRADED / FAILING — FAILING is the critical tier.
+    const critical = all.filter((h) =>
+      ['CRITICAL', 'FAILING'].includes(String(h.healthStatus).toUpperCase()),
+    ).length
     return { total: all.length, healthy, critical }
   }, [healthByPipeline])
 
