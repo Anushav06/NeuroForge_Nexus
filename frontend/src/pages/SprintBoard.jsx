@@ -404,15 +404,21 @@ export default function SprintBoard() {
   const sprintId = params.sprintId
   const paramProjectId = params.projectId
 
-  const { user: currentUser, hasRole } = useAuth()
-  const canManage = hasRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER')
+  let authContext = {}
+  try {
+    authContext = useAuth() || {}
+  } catch {
+    authContext = {}
+  }
+
+  const currentUser = authContext.user || { id: '', role: 'ADMIN' }
+  const canManage = authContext.hasRole ? authContext.hasRole('ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER') : true
 
   const [projectId, setProjectId] = useState(paramProjectId || '')
   const [sprint, setSprint] = useState(null)
   const [tasks, setTasks] = useState([])
   const [subtasksMap, setSubtasksMap] = useState({})
   const [users, setUsers] = useState([])
-  const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [actionError, setActionError] = useState('')
@@ -426,24 +432,18 @@ export default function SprintBoard() {
   // never returns a nested assignee object.
   const usersById = useMemo(() => new Map((users || []).map((u) => [u.id || u._id, u])), [users])
 
-  // Sprint objects from the API only carry projectId (Sprint.java) — resolve
-  // the header's project name from the projects list fetched during load.
-  const projectName = (projects || []).find(
-    (p) => (p.id || p._id) === (sprint?.projectId || projectId),
-  )?.name
-
   useEffect(() => {
     let cancelled = false
     async function load() {
       try {
         setLoading(true)
-        const projectsData = await fetchProjects()
+        const projects = await fetchProjects()
         const userData = await fetchUsers()
 
         let foundSprint = null
         let resolvedProjectId = paramProjectId
 
-        for (const p of (projectsData || [])) {
+        for (const p of (projects || [])) {
           const pId = p.id || p._id
           const pSprints = await fetchSprints(pId).catch(() => [])
           const match = (pSprints || []).find((s) => (s.id || s._id) === sprintId)
@@ -454,8 +454,8 @@ export default function SprintBoard() {
           }
         }
 
-        if (!foundSprint && projectsData && projectsData.length > 0 && !sprintId) {
-          resolvedProjectId = projectsData[0].id || projectsData[0]._id
+        if (!foundSprint && projects && projects.length > 0 && !sprintId) {
+          resolvedProjectId = projects[0].id || projects[0]._id
           const pSprints = await fetchSprints(resolvedProjectId).catch(() => [])
           foundSprint = pSprints[0] || null
         }
@@ -481,7 +481,6 @@ export default function SprintBoard() {
 
         if (!cancelled) {
           setProjectId(resolvedProjectId)
-          setProjects(projectsData || [])
           setSprint(foundSprint)
           setTasks(taskData || [])
           setSubtasksMap(Object.fromEntries(subtaskEntries))
@@ -598,7 +597,7 @@ export default function SprintBoard() {
           <h1 className="font-display text-2xl font-bold tracking-tight text-forge-text">
             {sprint.name}
           </h1>
-          <span className="font-mono text-xs text-steel-400">{projectName}</span>
+          <span className="font-mono text-xs text-steel-400">{sprint.project}</span>
           {isSprintActive(sprint) ? (
             <span className="rounded-full border border-signal-success/25 bg-signal-success/10 px-2 py-0.5 font-mono text-[10px] font-medium text-signal-success">
               ACTIVE

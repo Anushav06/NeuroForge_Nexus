@@ -20,12 +20,10 @@ import { EmptyState, PageHeader, StatCard } from '../components/ui'
  * Milestone 3 — CI/CD Pipelines.
  *
  * Builds, stats, and rollback are served from the real cicd-service backend
- * (see client.js). If cicd-service is down, each project's build list and the
- * org-wide stats degrade to empty lists / zeros; if user-service is down, the
- * page shows its error state.
+ * (see client.js). Falls back to mock data if USE_MOCK_PIPELINES is set.
  */
 
-const ROLLBACK_ROLES = ['ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER', 'TEAM_LEAD']
+const ROLLBACK_ROLES = ['ADMIN', 'PROJECT_LEAD', 'PROJECT_MANAGER']
 
 const formatDuration = (totalSeconds) => {
   const s = Number(totalSeconds) || 0
@@ -135,9 +133,10 @@ function StageTracker({ stages }) {
 }
 
 /* ── Test results summary: "Tests: 247 passed | 0 failed | Coverage: 87%" ── */
-/* Reads Build.testResult, populated by cicd-service. Renders nothing if a
-   build has no testResult yet (e.g. still RUNNING, or older seed data
-   predating this field). */
+/* Reads Build.testResult, populated by cicd-service but previously never
+   rendered anywhere in the UI — the spec's expected M3 output explicitly
+   calls for this line. Renders nothing if a build has no testResult yet
+   (e.g. still RUNNING, or older seed data predating this field). */
 
 function TestResultSummary({ testResult }) {
   if (!testResult) return null
@@ -314,7 +313,7 @@ export default function Pipelines() {
           safeProjects.map(async (p) => {
             const pId = p.id || p._id
             const [builds, stats] = await Promise.all([
-              fetchPipelines(pId).catch(() => []),
+              fetchPipelines(pId),
               fetchPipelineStats(pId),
             ])
             return [pId, { builds: builds || [], stats }]
