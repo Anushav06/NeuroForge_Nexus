@@ -19,6 +19,7 @@ public class Project {
     private List<String> memberIds = new ArrayList<>();
     private String sprint;
     private String dueDate;
+    private String repositoryUrl;
     private String createdAt;
 
     public Project() {
@@ -72,6 +73,9 @@ public class Project {
 
     public String getDueDate() { return dueDate; }
     public void setDueDate(String dueDate) { this.dueDate = dueDate; }
+
+    public String getRepositoryUrl() { return repositoryUrl; }
+    public void setRepositoryUrl(String repositoryUrl) { this.repositoryUrl = repositoryUrl; }
 
     public String getCreatedAt() { return createdAt; }
     public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }

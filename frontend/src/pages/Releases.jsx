@@ -310,6 +310,7 @@ function ReleaseRow({ release, canManage, onEdit, onPublish, onViewChangelog, pu
 function ProjectSection({
   project,
   releases,
+  deployments,
   isExpanded,
   onToggle,
   canManage,

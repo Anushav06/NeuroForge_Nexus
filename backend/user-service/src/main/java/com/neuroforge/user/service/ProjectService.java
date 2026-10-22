@@ -115,8 +115,20 @@ public class ProjectService {
         if (updated.getDueDate() != null) {
             existing.setDueDate(updated.getDueDate());
         }
-
+        if (updated.getRepositoryUrl() != null) {
+            existing.setRepositoryUrl(updated.getRepositoryUrl().isBlank()
+                    ? null
+                    : updated.getRepositoryUrl().trim());
+        }
         return projectRepository.save(existing);
+    }
+
+    public Project updateRepositoryUrl(String id, String repositoryUrl) {
+        Project project = getProject(id);
+        project.setRepositoryUrl(repositoryUrl == null || repositoryUrl.isBlank()
+                ? null
+                : repositoryUrl.trim());
+        return projectRepository.save(project);
     }
 
     public void deleteProject(String id) {
