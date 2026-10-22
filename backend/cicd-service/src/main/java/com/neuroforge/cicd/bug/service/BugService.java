@@ -146,9 +146,4 @@ public class BugService {
         };
     }
 
-    public void deleteBug(String bugId) {
-
-        Bug bug = getBugById(bugId);
-        bugRepository.delete(bug);
-    }
 }

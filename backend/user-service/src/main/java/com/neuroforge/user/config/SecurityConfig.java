@@ -40,6 +40,8 @@ public class SecurityConfig {
 
                         // Public authentication endpoints
                         .requestMatchers("/auth/login", "/auth/register").permitAll()
+                        // OAuth callback and HMAC-verified GitHub webhook deliveries
+                        .requestMatchers("/github/oauth/callback", "/github/webhook/**").permitAll()
 
                         // Public health and monitoring endpoints
                         .requestMatchers("/actuator/**").permitAll()
